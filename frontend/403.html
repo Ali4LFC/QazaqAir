@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>403 — Доступ запрещён</title>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="static/style.css" />
+    <style>
+      .forbidden-wrap {
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+      }
+      .forbidden-card {
+        max-width: 560px;
+        width: 100%;
+        border: 1px solid var(--glass-border);
+        background: var(--card-bg);
+        border-radius: 16px;
+        padding: 24px;
+        text-align: center;
+      }
+      .forbidden-title {
+        font-size: 1.8rem;
+        margin-bottom: 12px;
+      }
+      .forbidden-desc {
+        color: var(--text-secondary);
+        margin-bottom: 20px;
+      }
+      .hint {
+        font-size: 0.95rem;
+        color: var(--text-secondary);
+      }
+      .btn {
+        display: inline-block;
+        padding: 10px 16px;
+        border-radius: 10px;
+        border: 1px solid var(--glass-border);
+        background: var(--input-solid-bg);
+        color: var(--text-primary);
+        text-decoration: none;
+        margin-top: 10px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="forbidden-wrap">
+      <div class="forbidden-card">
+        <div class="forbidden-title">403 — Доступ запрещён</div>
+        <div class="forbidden-desc">
+          Ваш IP не входит в список разрешённых или находится в списке блокировки.
+        </div>
+        <div class="hint">
+          Если вы администратор, проверьте переменные окружения:<br />
+          <b>ALLOWED_IPS</b>, <b>BLOCKED_IPS</b> и <b>TRUST_X_FORWARDED</b> в файле <i>backend/.env</i>.
+        </div>
+        <a class="btn" href="/">На главную</a>
+      </div>
+    </div>
+  </body>
+  </html>

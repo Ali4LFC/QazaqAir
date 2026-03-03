@@ -15,6 +15,13 @@ class Settings:
     WAQI_TOKEN: str = os.getenv("WAQI_TOKEN", "")
     CITY: str = "Astana"
     POSTGRES_URL: str = os.getenv("POSTGRES_URL", "")
+    RATE_LIMIT_WINDOW_SECONDS: int = int(os.getenv("RATE_LIMIT_WINDOW_SECONDS", "60"))
+    RATE_LIMIT_MAX_REQUESTS: int = int(os.getenv("RATE_LIMIT_MAX_REQUESTS", "60"))
+    ALLOWED_IPS: list[str] = [x.strip() for x in os.getenv("ALLOWED_IPS", "").split(",") if x.strip()]
+    BLOCKED_IPS: list[str] = [x.strip() for x in os.getenv("BLOCKED_IPS", "").split(",") if x.strip()]
+    TRUST_X_FORWARDED: bool = os.getenv("TRUST_X_FORWARDED", "false").lower() in ("1", "true", "yes", "y")
+    SSL_CERTFILE: str | None = os.getenv("SSL_CERTFILE") or None
+    SSL_KEYFILE: str | None = os.getenv("SSL_KEYFILE") or None
     
     REGIONS = [
         {"key": "astana", "name": "Астана", "name_kk": "Астана", "city": "Astana", "coords": [51.1694, 71.4491], "aliases": ["Nur-Sultan"]},
