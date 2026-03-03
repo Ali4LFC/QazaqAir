@@ -260,8 +260,13 @@ async function updateAirQuality() {
 
 async function loadRegions() {
     const t = TRANSLATIONS[currentLang];
-    const res = await fetch('/api/regions');
+    const [res, s] = await Promise.all([
+        fetch('/api/regions'),
+        fetch('/api/summary')
+    ]);
     const list = await res.json();
+    const sd = await s.json();
+    
     const container = document.getElementById('side-list') || document.getElementById('regions-list');
     const searchEl = document.getElementById('region-search-input');
     if (!container) return;
@@ -269,13 +274,10 @@ async function loadRegions() {
     container.innerHTML = '';
     const byName = {};
     let aqiMap = {};
-    try {
-        const s = await fetch('/api/summary');
-        const sd = await s.json();
-        for (const it of [...sd.clean, ...sd.dirty]) {
-            aqiMap[it.key] = it.aqi;
-        }
-    } catch (e) {}
+    
+    for (const it of [...sd.clean, ...sd.dirty]) {
+        aqiMap[it.key] = it.aqi;
+    }
 
     const urlParams = new URLSearchParams(location.search);
     const fromUrl = urlParams.get('region');

@@ -20,6 +20,10 @@ async def on_startup():
     try:
         db.init_db()
         scheduler_service.start()
+        # Предварительный прогрев кеша для всех регионов в фоновом режиме
+        import asyncio
+        from backend.app.api.endpoints.air_quality import get_summary
+        asyncio.create_task(get_summary())
     except Exception as e:
         print(f"[STARTUP ERROR] {e}")
 

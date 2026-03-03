@@ -1,3 +1,4 @@
+import asyncio
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import JSONResponse
 import httpx
@@ -51,24 +52,22 @@ async def get_regions():
 
 @router.get("/summary")
 async def get_summary():
-    results = []
-    try:
-        for r in settings.REGIONS:
-            c = waqi_service._cache_get(r["key"])
-            if c:
-                aq = c["current"]["pollution"]["aqius"]
-                results.append({"region": r["name"], "name_kk": r.get("name_kk"), "key": r["key"], "aqi": aq})
-                continue
-            try:
-                d = await waqi_service.fetch_for_region(r)
-                aq = int(d["current"]["pollution"]["aqius"]) if d["current"]["pollution"]["aqius"] is not None else None
-                results.append({"region": r["name"], "name_kk": r.get("name_kk"), "key": r["key"], "aqi": aq})
-                if aq is not None:
-                    waqi_service._cache_set(r["key"], d)
-            except Exception:
-                results.append({"region": r["name"], "key": r["key"], "aqi": None})
-    except Exception:
-        pass
+    async def get_region_aqi(r):
+        c = waqi_service._cache_get(r["key"])
+        if c:
+            aq = c["current"]["pollution"]["aqius"]
+            return {"region": r["name"], "name_kk": r.get("name_kk"), "key": r["key"], "aqi": aq}
+        try:
+            d = await waqi_service.fetch_for_region(r)
+            aq = int(d["current"]["pollution"]["aqius"]) if d["current"]["pollution"]["aqius"] is not None else None
+            if aq is not None:
+                waqi_service._cache_set(r["key"], d)
+            return {"region": r["name"], "name_kk": r.get("name_kk"), "key": r["key"], "aqi": aq}
+        except Exception:
+            return {"region": r["name"], "name_kk": r.get("name_kk"), "key": r["key"], "aqi": None}
+
+    tasks = [get_region_aqi(r) for r in settings.REGIONS]
+    results = await asyncio.gather(*tasks)
         
     clean = [x for x in results if isinstance(x["aqi"], int)]
     clean_sorted = sorted(clean, key=lambda x: x["aqi"])
