@@ -1,6 +1,60 @@
 const ASTANA_COORDS = [51.1694, 71.4491];
 let selectedRegion = null;
 let currentTheme = localStorage.getItem('theme') || 'dark';
+let currentLang = localStorage.getItem('lang') || 'kk';
+
+const TRANSLATIONS = {
+    kk: {
+        good: "Жақсы",
+        moderate: "Орташа",
+        sensitive: "Сезімтал топтар үшін зиянды",
+        unhealthy: "Зиянды",
+        veryUnhealthy: "Өте зиянды",
+        hazardous: "Қауіпті",
+        noData: "Мәлімет жоқ",
+        loading: "Жүктелуде...",
+        error: "Қате орын алды",
+        updateTime: "Жаңартылды",
+        temp: "Температура",
+        hum: "Ылғалдылық",
+        wind: "Жел",
+        ms: "м/с",
+        selectRegion: "Аймақты таңдаңыз",
+        aqiCaption: "Ауа сапасының индексі (AQI)",
+        regionsTitle: "Қазақстан аймақтары",
+        searchPlaceholder: "Аймақты іздеу...",
+        regionInfoTitle: "Аймақ бойынша ақпарат",
+        dirtyTitle: "Ең лас (топ-10)",
+        cleanTitle: "Ең таза (топ-10)",
+        footer: "Мәліметтер IQAir API арқылы алынды • Әр 60 секунд сайын жаңартылады.",
+        status: "Мәртебесі"
+    },
+    ru: {
+        good: "Хорошо",
+        moderate: "Умеренно",
+        sensitive: "Нездорово для чувствительных",
+        unhealthy: "Нездорово",
+        veryUnhealthy: "Очень нездорово",
+        hazardous: "Опасно",
+        noData: "Нет данных",
+        loading: "Загрузка...",
+        error: "Ошибка загрузки",
+        updateTime: "Обновлено",
+        temp: "Температура",
+        hum: "Влажность",
+        wind: "Ветер",
+        ms: "м/с",
+        selectRegion: "Выберите регион",
+        aqiCaption: "Индекс качества воздуха (AQI)",
+        regionsTitle: "Регионы Казахстана",
+        searchPlaceholder: "Поиск региона...",
+        regionInfoTitle: "Информация по региону",
+        dirtyTitle: "Самые загрязненные (топ‑10)",
+        cleanTitle: "Самые чистые (топ‑10)",
+        footer: "Данные предоставлены IQAir API • Обновление каждые 60 сек.",
+        status: "Статус"
+    }
+};
 
 const map = L.map('map', { zoomControl: false }).setView(ASTANA_COORDS, 12);
 
@@ -31,12 +85,13 @@ let kazLayer = null;
 let selectedCircle = null;
 
 function getAQIInfo(aqi) {
-    if (aqi <= 50) return { label: "Хорошо", color: "#00e400", class: "good" };
-    if (aqi <= 100) return { label: "Умеренно", color: "#ffff00", class: "moderate" };
-    if (aqi <= 150) return { label: "Нездорово для чувствительных", color: "#ff7e00", class: "sensitive" };
-    if (aqi <= 200) return { label: "Нездорово", color: "#ff0000", class: "unhealthy" };
-    if (aqi <= 300) return { label: "Очень нездорово", color: "#8f3f97", class: "very-unhealthy" };
-    return { label: "Опасно", color: "#7e0023", class: "hazardous" };
+    const t = TRANSLATIONS[currentLang];
+    if (aqi <= 50) return { label: t.good, color: "#00e400", class: "good" };
+    if (aqi <= 100) return { label: t.moderate, color: "#ffff00", class: "moderate" };
+    if (aqi <= 150) return { label: t.sensitive, color: "#ff7e00", class: "sensitive" };
+    if (aqi <= 200) return { label: t.unhealthy, color: "#ff0000", class: "unhealthy" };
+    if (aqi <= 300) return { label: t.veryUnhealthy, color: "#8f3f97", class: "very-unhealthy" };
+    return { label: t.hazardous, color: "#7e0023", class: "hazardous" };
 }
 
 function applyTheme() {
@@ -47,24 +102,59 @@ function applyTheme() {
     updateKazStyle();
 }
 
-function initThemeToggle() {
+function applyLanguage() {
+    const t = TRANSLATIONS[currentLang];
+    document.getElementById('lang-text').innerText = currentLang;
+    
+    // Update static texts
+    document.getElementById('aqi-caption').innerText = t.aqiCaption;
+    document.getElementById('side-title').innerText = t.regionsTitle;
+    document.getElementById('region-search-input').placeholder = t.searchPlaceholder;
+    document.getElementById('region-info-title').innerText = t.regionInfoTitle;
+    document.getElementById('label-temp').innerText = t.temp;
+    document.getElementById('label-hum').innerText = t.hum;
+    document.getElementById('label-wind').innerText = t.wind;
+    document.getElementById('dirty-title').innerText = t.dirtyTitle;
+    document.getElementById('clean-title').innerText = t.cleanTitle;
+    document.getElementById('footer-text').innerText = t.footer;
+    
+    // Refresh dynamic parts
+    updateAirQuality();
+    loadRegions(); 
+    updateSummary();
+}
+
+function initToggles() {
     applyTheme();
-    const btn = document.getElementById('theme-toggle');
-    const menu = document.getElementById('menu-toggle');
+    document.getElementById('lang-text').innerText = currentLang;
+
+    const themeBtn = document.getElementById('theme-toggle');
+    const langBtn = document.getElementById('lang-toggle');
+    const menuBtn = document.getElementById('menu-toggle');
     const panel = document.getElementById('side-panel');
     const overlay = document.getElementById('side-overlay');
     const closeBtn = document.getElementById('side-close');
-    if (btn) {
-        btn.onclick = () => {
+
+    if (themeBtn) {
+        themeBtn.onclick = () => {
             currentTheme = currentTheme === 'light' ? 'dark' : 'light';
             localStorage.setItem('theme', currentTheme);
             applyTheme();
         };
     }
-    if (menu && panel && overlay && closeBtn) {
+    
+    if (langBtn) {
+        langBtn.onclick = () => {
+            currentLang = currentLang === 'kk' ? 'ru' : 'kk';
+            localStorage.setItem('lang', currentLang);
+            applyLanguage();
+        };
+    }
+
+    if (menuBtn && panel && overlay && closeBtn) {
         const open = () => { panel.classList.add('open'); overlay.classList.add('open'); };
         const close = () => { panel.classList.remove('open'); overlay.classList.remove('open'); };
-        menu.onclick = open;
+        menuBtn.onclick = open;
         overlay.onclick = close;
         closeBtn.onclick = close;
     }
@@ -95,6 +185,7 @@ async function loadKazakhstanBorder() {
 }
 
 async function updateAirQuality() {
+    const t = TRANSLATIONS[currentLang];
     try {
         const url = selectedRegion ? `/api/air-quality?region=${encodeURIComponent(selectedRegion)}` : '/api/air-quality';
         const response = await fetch(url);
@@ -104,7 +195,7 @@ async function updateAirQuality() {
         const aqi = data.current.pollution.aqius;
         const weather = data.current.weather;
         const hasAQI = typeof aqi === 'number' && !Number.isNaN(aqi);
-        const info = hasAQI ? getAQIInfo(aqi) : { label: "Нет данных", color: "#8b949e" };
+        const info = hasAQI ? getAQIInfo(aqi) : { label: t.noData, color: "#8b949e" };
 
         document.getElementById('aqi-value').innerText = hasAQI ? aqi : '--';
         document.getElementById('aqi-value').style.color = info.color;
@@ -116,10 +207,14 @@ async function updateAirQuality() {
 
         document.getElementById('temp-value').innerText = `${weather.tp}°C`;
         document.getElementById('humidity-value').innerText = `${weather.hu}%`;
-        document.getElementById('wind-value').innerText = `${weather.ws} м/с`;
+        document.getElementById('wind-value').innerText = `${weather.ws} ${t.ms}`;
         
-        document.getElementById('last-update').innerText = `Обновлено: ${new Date().toLocaleTimeString()}`;
-        const rn = data.region ? data.region.name : data.city;
+        document.getElementById('last-update').innerText = `${t.updateTime}: ${new Date().toLocaleTimeString()}`;
+        
+        let rn = data.city;
+        if (data.region) {
+            rn = (currentLang === 'kk' && data.region.name_kk) ? data.region.name_kk : data.region.name;
+        }
         document.getElementById('region-name').innerText = rn;
 
         const location = (data.region && data.region.coords) ? data.region.coords : [data.location.coordinates[1], data.location.coordinates[0]];
@@ -136,7 +231,8 @@ async function updateAirQuality() {
         });
 
         marker = L.marker(location, { icon: icon }).addTo(map);
-        marker.bindPopup(`<b>${data.city}</b><br>AQI: ${aqi}<br>Статус: ${info.label}`).openPopup();
+        marker.bindPopup(`<b>${rn}</b><br>AQI: ${aqi}<br>${t.status}: ${info.label}`).openPopup();
+        
         if (selectedCircle) map.removeLayer(selectedCircle);
         selectedCircle = L.circle(location, {
             radius: 50000,
@@ -144,28 +240,32 @@ async function updateAirQuality() {
             weight: 2,
             fill: false
         }).addTo(map);
+
         const infoBox = document.getElementById('region-info-body');
         if (infoBox) {
             infoBox.innerHTML = `
                 <div><b>${rn}</b></div>
                 <div>AQI: ${hasAQI ? aqi : '—'} (${info.label})</div>
-                <div>Температура: ${weather.tp} °C</div>
-                <div>Влажность: ${weather.hu} %</div>
-                <div>Ветер: ${weather.ws} м/с</div>
+                <div>${t.temp}: ${weather.tp} °C</div>
+                <div>${t.hum}: ${weather.hu} %</div>
+                <div>${t.wind}: ${weather.ws} ${t.ms}</div>
             `;
         }
 
     } catch (error) {
         console.error('Fetch error:', error);
-        document.getElementById('aqi-status').innerText = 'Ошибка загрузки';
+        document.getElementById('aqi-status').innerText = t.error;
     }
 }
 
 async function loadRegions() {
+    const t = TRANSLATIONS[currentLang];
     const res = await fetch('/api/regions');
     const list = await res.json();
     const container = document.getElementById('side-list') || document.getElementById('regions-list');
     const searchEl = document.getElementById('region-search-input');
+    if (!container) return;
+    
     container.innerHTML = '';
     const byName = {};
     let aqiMap = {};
@@ -176,17 +276,22 @@ async function loadRegions() {
             aqiMap[it.key] = it.aqi;
         }
     } catch (e) {}
+
     const urlParams = new URLSearchParams(location.search);
     const fromUrl = urlParams.get('region');
     const fromStorage = localStorage.getItem('region');
     selectedRegion = fromUrl || fromStorage || (list[0]?.key || null);
+
     for (const r of list) {
+        const displayName = (currentLang === 'kk' && r.name_kk) ? r.name_kk : r.name;
         const btn = document.createElement('button');
         btn.className = 'region-btn' + (selectedRegion === r.key ? ' active' : '');
         btn.dataset.key = r.key;
-        btn.dataset.name = r.name.toLowerCase();
+        btn.dataset.name = displayName.toLowerCase();
+        
         const badgeVal = (aqiMap[r.key] ?? '—');
-        btn.innerHTML = `${r.name} <span class="badge">${badgeVal}</span>`;
+        btn.innerHTML = `${displayName} <span class="badge">${badgeVal}</span>`;
+        
         const badgeNum = typeof badgeVal === 'number' ? badgeVal : null;
         if (badgeNum !== null) {
             const infoColor = getAQIInfo(badgeNum).color;
@@ -208,46 +313,16 @@ async function loadRegions() {
             updateAirQuality();
         };
         container.appendChild(btn);
-        byName[r.name.toLowerCase()] = { r, btn };
+        byName[displayName.toLowerCase()] = { r, btn };
     }
     addRegionMarkers(list);
+    
     if (searchEl) {
-        const selectBy = ({ r, btn }) => {
-            selectedRegion = r.key;
-            localStorage.setItem('region', selectedRegion);
-            const params = new URLSearchParams(location.search);
-            params.set('region', selectedRegion);
-            history.replaceState({}, '', `${location.pathname}?${params.toString()}`);
-            for (const c of container.querySelectorAll('.region-btn')) c.classList.remove('active');
-            btn.classList.add('active');
-            map.setView(r.coords, 11);
-            updateAirQuality();
-        };
         searchEl.oninput = () => {
             const q = searchEl.value.trim().toLowerCase();
             for (const btn of container.querySelectorAll('.region-btn')) {
-                const txt = btn.dataset.name || btn.textContent.toLowerCase();
+                const txt = btn.dataset.name;
                 btn.style.display = txt.includes(q) ? '' : 'none';
-            }
-            if (q.length > 0 && byName[q]) {
-                selectBy(byName[q]);
-                return;
-            }
-            const visible = Array.from(container.querySelectorAll('.region-btn')).filter(b => b.style.display !== 'none');
-            if (visible.length === 1) {
-                const k = visible[0].dataset.key;
-                const found = list.find(x => x.key === k);
-                if (found) selectBy({ r: found, btn: visible[0] });
-            }
-        };
-        searchEl.onkeydown = (e) => {
-            if (e.key === 'Enter') {
-                const visible = Array.from(container.querySelectorAll('.region-btn')).filter(b => b.style.display !== 'none');
-                if (visible[0]) {
-                    const k = visible[0].dataset.key;
-                    const found = list.find(x => x.key === k);
-                    if (found) selectBy({ r: found, btn: visible[0] });
-                }
             }
         };
     }
@@ -257,6 +332,7 @@ function addRegionMarkers(list) {
     for (const m of regionMarkers) map.removeLayer(m);
     regionMarkers = [];
     for (const r of list) {
+        const displayName = (currentLang === 'kk' && r.name_kk) ? r.name_kk : r.name;
         const m = L.circleMarker([r.coords[0], r.coords[1]], {
             radius: 6,
             color: '#fff',
@@ -264,7 +340,7 @@ function addRegionMarkers(list) {
             fillColor: '#2ea043',
             fillOpacity: 0.8
         }).addTo(map);
-        m.bindTooltip(r.name, { permanent: false });
+        m.bindTooltip(displayName, { permanent: false });
         m.on('click', () => {
             selectedRegion = r.key;
             localStorage.setItem('region', selectedRegion);
@@ -285,15 +361,20 @@ async function updateSummary() {
     const data = await res.json();
     const dirtyEl = document.getElementById('dirty-list');
     const cleanEl = document.getElementById('clean-list');
+    
     const render = (arr, el) => {
         el.innerHTML = '';
         for (const item of arr) {
             const info = getAQIInfo(item.aqi);
             const row = document.createElement('div');
             row.className = 'rank-item';
+            
             const name = document.createElement('div');
             name.className = 'rank-name';
-            name.innerText = item.region;
+            
+            let regionName = (currentLang === 'kk' && item.name_kk) ? item.name_kk : item.region;
+            name.innerText = regionName;
+
             const badge = document.createElement('div');
             badge.className = 'rank-badge';
             badge.style.background = info.color;
@@ -307,11 +388,12 @@ async function updateSummary() {
     render(data.clean, cleanEl);
 }
 
-initThemeToggle();
+initToggles();
 loadKazakhstanBorder();
 loadRegions().then(() => {
     updateAirQuality();
     updateSummary();
+    applyLanguage(); // Применяем язык после загрузки данных
 });
 
 setTimeout(() => {

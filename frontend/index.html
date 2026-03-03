@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Air Astana - Качество воздуха в Астане</title>
+    <title>QazaqAir - Ауа сапасы</title>
     <!-- Google Fonts -->
     <link
       href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap"
@@ -23,7 +23,7 @@
       <header>
         <div class="logo">
           <span class="pulse-icon"></span>
-          <h1>Air Astana Monitor</h1>
+          <h1>QazaqAir</h1>
         </div>
         <div class="actions">
           <button
@@ -35,6 +35,14 @@
             <span>☰</span>
           </button>
           <button
+            id="lang-toggle"
+            class="icon-btn text-btn"
+            title="Тілді ауыстыру"
+            aria-label="Тілді ауыстыру"
+          >
+            <span id="lang-text">kk</span>
+          </button>
+          <button
             id="theme-toggle"
             class="icon-btn"
             title="Сменить тему"
@@ -42,19 +50,19 @@
           >
             <span id="theme-icon">🌙</span>
           </button>
-          <div id="last-update" class="status-badge">Обновление: --:--:--</div>
+          <div id="last-update" class="status-badge">Жаңартылды: --:--:--</div>
         </div>
       </header>
 
       <div id="side-overlay" class="side-overlay"></div>
       <aside id="side-panel" class="side-panel">
         <div class="side-header">
-          <div class="regions-title">Регионы Казахстана</div>
+          <div id="side-title" class="regions-title">Қазақстан аймақтары</div>
           <button
             id="side-close"
             class="icon-btn"
-            title="Закрыть"
-            aria-label="Закрыть"
+            title="Жабу"
+            aria-label="Жабу"
           >
             ✕
           </button>
@@ -63,15 +71,15 @@
           <input
             id="region-search-input"
             type="text"
-            placeholder="Поиск региона..."
-            aria-label="Поиск региона"
+            placeholder="Аймақты іздеу..."
+            aria-label="Аймақты іздеу"
           />
         </div>
         <div id="side-list" class="regions-list"></div>
         <div id="region-info" class="region-info card glass">
-          <div class="summary-title">Информация по региону</div>
+          <div id="region-info-title" class="summary-title">Аймақ бойынша ақпарат</div>
           <div id="region-info-body" class="region-info-body">
-            Выберите регион
+            Аймақты таңдаңыз
           </div>
         </div>
       </aside>
@@ -80,22 +88,22 @@
         <div class="dashboard-grid">
           <!-- Data Panel -->
           <div class="card data-card glass">
-            <div id="region-name" class="city-name">Астана, Казахстан</div>
+            <div id="region-name" class="city-name">Астана, Қазақстан</div>
             <div id="aqi-value" class="aqi-main">--</div>
-            <div class="aqi-caption">Индекс качества воздуха (AQI)</div>
-            <div id="aqi-status" class="aqi-status">Загрузка...</div>
+            <div id="aqi-caption" class="aqi-caption">Ауа сапасының индексі (AQI)</div>
+            <div id="aqi-status" class="aqi-status">Жүктелуде...</div>
 
             <div class="weather-grid">
               <div class="weather-item">
-                <span class="label">Температура</span>
+                <span id="label-temp" class="label">Температура</span>
                 <span id="temp-value" class="value">--°C</span>
               </div>
               <div class="weather-item">
-                <span class="label">Влажность</span>
+                <span id="label-hum" class="label">Ылғалдылық</span>
                 <span id="humidity-value" class="value">--%</span>
               </div>
               <div class="weather-item">
-                <span class="label">Ветер</span>
+                <span id="label-wind" class="label">Жел</span>
                 <span id="wind-value" class="value">-- м/с</span>
               </div>
             </div>
@@ -109,18 +117,18 @@
 
         <div class="summary-grid">
           <div class="card glass">
-            <div class="summary-title">Самые загрязненные (топ‑10)</div>
+            <div id="dirty-title" class="summary-title">Ең лас (топ-10)</div>
             <div id="dirty-list" class="rank-list"></div>
           </div>
           <div class="card glass">
-            <div class="summary-title">Самые чистые (топ‑10)</div>
+            <div id="clean-title" class="summary-title">Ең таза (топ-10)</div>
             <div id="clean-list" class="rank-list"></div>
           </div>
         </div>
       </main>
 
       <footer>
-        <p>Данные предоставлены IQAir API • Обновление каждые 30 сек.</p>
+        <p id="footer-text">Мәліметтер IQAir API арқылы алынды • Әр 60 секунд сайын жаңартылады.</p>
       </footer>
     </div>
 
