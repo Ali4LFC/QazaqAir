@@ -260,7 +260,12 @@ loadRegions().then(() => {
     updateSummary();
 });
 
-setInterval(() => {
+setTimeout(() => {
     updateAirQuality();
     updateSummary();
+    // Затем запускаем регулярное обновление каждую МИНУТУ (60 секунд)
+    setInterval(() => {
+        updateAirQuality();
+        updateSummary();
+    }, 60000);
 }, 10000);

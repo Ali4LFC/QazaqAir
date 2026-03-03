@@ -56,7 +56,7 @@ def _cache_get(key: str):
     if not item:
         return None
     now = datetime.now()
-    if item["last_updated"] and (now - item["last_updated"]) < timedelta(seconds=30):
+    if item["last_updated"] and (now - item["last_updated"]) < timedelta(seconds=60):
         return item["data"]
     return None
 
@@ -301,7 +301,14 @@ def _save_hourly_row(conn, rkey: str, city: str, ts_hour: datetime, aqi, tp, hu,
 def _save_all_regions_now():
     if not POSTGRES_URL:
         return {"ok": False, "reason": "DB not configured"}
-    ts_hour = datetime.utcnow().replace(minute=0, second=0, microsecond=0)
+    
+    # Теперь время берется по Казахстанскому времени (UTC+5)
+    # С 1 марта 2024 года в Казахстане единый часовой пояс UTC+5
+    kz_time = datetime.utcnow() + timedelta(hours=5)
+    # Теперь сохраняем ТОЧНОЕ время (с минутами и секундами)
+    ts_hour = kz_time.replace(microsecond=0)
+    print(f"[DB DEBUG] Метка времени для сохранения: {ts_hour}")
+    
     try:
         u = urlparse(POSTGRES_URL)
         dbname = (u.path or "").lstrip("/")
@@ -402,16 +409,16 @@ async def on_startup():
         print(f"[STARTUP ERROR] Инициализация БД провалилась, но приложение продолжит работу: {e}")
 
     if db["engine"]:
-        # Сразу сохраняем один раз при запуске
-        print("[DB] Выполняю немедленное сохранение данных при запуске...")
-        res = _save_all_regions_now()
-        if res.get("ok"):
-            print("[DB] Первое сохранение данных прошло успешно!")
-        else:
-            print(f"[DB ERROR] Не удалось сохранить данные при запуске: {res.get('reason')}")
-
-        scheduler.add_job(_save_all_regions_now, "cron", minute=0)
+        # Запускаем планировщик
         scheduler.start()
+        
+        # Планируем первое сохранение через 1 МИНУТУ после запуска
+        run_at = datetime.now() + timedelta(minutes=1)
+        print(f"[DB] Первое сохранение данных запланировано через 1 МИНУТУ (в {run_at.strftime('%H:%M:%S')})")
+        scheduler.add_job(_save_all_regions_now, 'date', run_date=run_at)
+
+        # Основное расписание: каждый ЧАС в 00 минут
+        scheduler.add_job(_save_all_regions_now, "cron", minute=0)
     else:
         print("[WARNING] Движок БД недоступен. Фоновое сохранение НЕ запущено.")
 
