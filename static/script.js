@@ -165,7 +165,9 @@ async function loadRegions() {
     const res = await fetch('/api/regions');
     const list = await res.json();
     const container = document.getElementById('side-list') || document.getElementById('regions-list');
+    const searchEl = document.getElementById('region-search-input');
     container.innerHTML = '';
+    const byName = {};
     let aqiMap = {};
     try {
         const s = await fetch('/api/summary');
@@ -181,8 +183,19 @@ async function loadRegions() {
     for (const r of list) {
         const btn = document.createElement('button');
         btn.className = 'region-btn' + (selectedRegion === r.key ? ' active' : '');
+        btn.dataset.key = r.key;
+        btn.dataset.name = r.name.toLowerCase();
         const badgeVal = (aqiMap[r.key] ?? '—');
         btn.innerHTML = `${r.name} <span class="badge">${badgeVal}</span>`;
+        const badgeNum = typeof badgeVal === 'number' ? badgeVal : null;
+        if (badgeNum !== null) {
+            const infoColor = getAQIInfo(badgeNum).color;
+            const b = btn.querySelector('.badge');
+            if (b) {
+                b.style.background = infoColor;
+                b.style.color = '#000';
+            }
+        }
         btn.onclick = () => {
             selectedRegion = r.key;
             localStorage.setItem('region', selectedRegion);
@@ -195,8 +208,49 @@ async function loadRegions() {
             updateAirQuality();
         };
         container.appendChild(btn);
+        byName[r.name.toLowerCase()] = { r, btn };
     }
     addRegionMarkers(list);
+    if (searchEl) {
+        const selectBy = ({ r, btn }) => {
+            selectedRegion = r.key;
+            localStorage.setItem('region', selectedRegion);
+            const params = new URLSearchParams(location.search);
+            params.set('region', selectedRegion);
+            history.replaceState({}, '', `${location.pathname}?${params.toString()}`);
+            for (const c of container.querySelectorAll('.region-btn')) c.classList.remove('active');
+            btn.classList.add('active');
+            map.setView(r.coords, 11);
+            updateAirQuality();
+        };
+        searchEl.oninput = () => {
+            const q = searchEl.value.trim().toLowerCase();
+            for (const btn of container.querySelectorAll('.region-btn')) {
+                const txt = btn.dataset.name || btn.textContent.toLowerCase();
+                btn.style.display = txt.includes(q) ? '' : 'none';
+            }
+            if (q.length > 0 && byName[q]) {
+                selectBy(byName[q]);
+                return;
+            }
+            const visible = Array.from(container.querySelectorAll('.region-btn')).filter(b => b.style.display !== 'none');
+            if (visible.length === 1) {
+                const k = visible[0].dataset.key;
+                const found = list.find(x => x.key === k);
+                if (found) selectBy({ r: found, btn: visible[0] });
+            }
+        };
+        searchEl.onkeydown = (e) => {
+            if (e.key === 'Enter') {
+                const visible = Array.from(container.querySelectorAll('.region-btn')).filter(b => b.style.display !== 'none');
+                if (visible[0]) {
+                    const k = visible[0].dataset.key;
+                    const found = list.find(x => x.key === k);
+                    if (found) selectBy({ r: found, btn: visible[0] });
+                }
+            }
+        };
+    }
 }
 
 function addRegionMarkers(list) {

@@ -26,7 +26,12 @@
           <h1>Air Astana Monitor</h1>
         </div>
         <div class="actions">
-          <button id="menu-toggle" class="icon-btn" title="Регионы" aria-label="Регионы">
+          <button
+            id="menu-toggle"
+            class="icon-btn"
+            title="Регионы"
+            aria-label="Регионы"
+          >
             <span>☰</span>
           </button>
           <button
@@ -45,12 +50,29 @@
       <aside id="side-panel" class="side-panel">
         <div class="side-header">
           <div class="regions-title">Регионы Казахстана</div>
-          <button id="side-close" class="icon-btn" title="Закрыть" aria-label="Закрыть">✕</button>
+          <button
+            id="side-close"
+            class="icon-btn"
+            title="Закрыть"
+            aria-label="Закрыть"
+          >
+            ✕
+          </button>
+        </div>
+        <div class="region-search">
+          <input
+            id="region-search-input"
+            type="text"
+            placeholder="Поиск региона..."
+            aria-label="Поиск региона"
+          />
         </div>
         <div id="side-list" class="regions-list"></div>
         <div id="region-info" class="region-info card glass">
           <div class="summary-title">Информация по региону</div>
-          <div id="region-info-body" class="region-info-body">Выберите регион</div>
+          <div id="region-info-body" class="region-info-body">
+            Выберите регион
+          </div>
         </div>
       </aside>
 
@@ -60,6 +82,7 @@
           <div class="card data-card glass">
             <div id="region-name" class="city-name">Астана, Казахстан</div>
             <div id="aqi-value" class="aqi-main">--</div>
+            <div class="aqi-caption">Индекс качества воздуха (AQI)</div>
             <div id="aqi-status" class="aqi-status">Загрузка...</div>
 
             <div class="weather-grid">
