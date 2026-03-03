@@ -20,6 +20,21 @@
     --aqi-hazardous: #7e0023;
 }
 
+/* Global Custom Scrollbar */
+::-webkit-scrollbar {
+    width: 6px;
+}
+::-webkit-scrollbar-track {
+    background: var(--scrollbar-track);
+}
+::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb);
+    border-radius: 10px;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: var(--scrollbar-thumb-hover);
+}
+
 * {
     margin: 0;
     padding: 0;
@@ -317,20 +332,6 @@ header {
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
     box-shadow: 0 10px 30px rgba(0,0,0,0.35);
-}
-/* Custom Scrollbar for side-panel */
-.side-panel::-webkit-scrollbar {
-    width: 6px;
-}
-.side-panel::-webkit-scrollbar-track {
-    background: var(--scrollbar-track);
-}
-.side-panel::-webkit-scrollbar-thumb {
-    background: var(--scrollbar-thumb);
-    border-radius: 10px;
-}
-.side-panel::-webkit-scrollbar-thumb:hover {
-    background: var(--scrollbar-thumb-hover);
 }
 .side-panel.open {
     transform: translateX(0);
