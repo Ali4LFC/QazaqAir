@@ -7,14 +7,15 @@ import os
 from dotenv import load_dotenv
 from datetime import datetime, timedelta
 from sqlalchemy import create_engine, Table, Column, Integer, String, Float, DateTime, MetaData, select, and_, inspect, func, UniqueConstraint, text
+from sqlalchemy.engine import URL
 from sqlalchemy.exc import SQLAlchemyError
 from apscheduler.schedulers.background import BackgroundScheduler
 import psycopg2
 from psycopg2.extras import execute_values
-from urllib.parse import urlparse
+from urllib.parse import urlparse, unquote
 
 # Load environment variables from .env
-load_dotenv()
+load_dotenv(override=True)
 
 app = FastAPI(title="Astana Air Quality Monitor")
 
@@ -233,25 +234,53 @@ async def get_summary():
 
 def _init_db():
     if not POSTGRES_URL:
+        print("[DB ERROR] POSTGRES_URL не установлен в .env")
         return
-    engine = create_engine(POSTGRES_URL, pool_pre_ping=True, future=True)
-    meta = MetaData()
-    table = Table(
-        "aqi_hourly",
-        meta,
-        Column("id", Integer, primary_key=True, autoincrement=True),
-        Column("region_key", String(64), index=True, nullable=False),
-        Column("city", String(128), nullable=False),
-        Column("ts_hour", DateTime, index=True, nullable=False),
-        Column("aqi", Integer, nullable=True),
-        Column("temp_c", Float, nullable=True),
-        Column("humidity_pct", Integer, nullable=True),
-        Column("wind_ms", Float, nullable=True),
-        UniqueConstraint("region_key", "ts_hour", name="uq_region_hour"),
-    )
-    meta.create_all(engine)
-    db["engine"] = engine
-    db["table"] = table
+    try:
+        # Разбираем URL для надежной передачи параметров
+        u = urlparse(POSTGRES_URL)
+        username = unquote(u.username) if u.username else None
+        password = unquote(u.password) if u.password else None
+        
+        # Маскированный URL для логов (без пароля)
+        print(f"[DB DEBUG] Пытаюсь подключиться к: {u.hostname}")
+        print(f"[DB DEBUG] Пользователь: {username}")
+        if password:
+            print(f"[DB DEBUG] Длина пароля: {len(password)} символов")
+
+        # Создаем engine через объект URL, чтобы избежать проблем с парсингом строки внутри SQLAlchemy
+        db_url = URL.create(
+            drivername="postgresql+psycopg2",
+            username=username,
+            password=password,
+            host=u.hostname,
+            port=u.port or 5432,
+            database=(u.path or "").lstrip("/"),
+        )
+        
+        engine = create_engine(db_url, pool_pre_ping=True, future=True)
+        meta = MetaData()
+        table = Table(
+            "aqi_hourly",
+            meta,
+            Column("id", Integer, primary_key=True, autoincrement=True),
+            Column("region_key", String(64), index=True, nullable=False),
+            Column("city", String(128), nullable=False),
+            Column("ts_hour", DateTime, index=True, nullable=False),
+            Column("aqi", Integer, nullable=True),
+            Column("temp_c", Float, nullable=True),
+            Column("humidity_pct", Integer, nullable=True),
+            Column("wind_ms", Float, nullable=True),
+            UniqueConstraint("region_key", "ts_hour", name="uq_region_hour"),
+        )
+        meta.create_all(engine)
+        db["engine"] = engine
+        db["table"] = table
+        print("[DB] Connection initialized and tables checked.")
+    except Exception as e:
+        print(f"[DB ERROR] Failed to initialize DB: {e}")
+        db["engine"] = None
+        db["table"] = None
 
 def _save_hourly_row(conn, rkey: str, city: str, ts_hour: datetime, aqi, tp, hu, ws):
     sql = text("""
@@ -278,8 +307,8 @@ def _save_all_regions_now():
         dbname = (u.path or "").lstrip("/")
         conn = psycopg2.connect(
             dbname=dbname,
-            user=u.username,
-            password=u.password,
+            user=unquote(u.username) if u.username else None,
+            password=unquote(u.password) if u.password else None,
             host=u.hostname,
             port=u.port or 5432,
         )
@@ -367,10 +396,24 @@ def _fetch_for_region_sync(r: dict):
 
 @app.on_event("startup")
 async def on_startup():
-    _init_db()
+    try:
+        _init_db()
+    except Exception as e:
+        print(f"[STARTUP ERROR] Инициализация БД провалилась, но приложение продолжит работу: {e}")
+
     if db["engine"]:
+        # Сразу сохраняем один раз при запуске
+        print("[DB] Выполняю немедленное сохранение данных при запуске...")
+        res = _save_all_regions_now()
+        if res.get("ok"):
+            print("[DB] Первое сохранение данных прошло успешно!")
+        else:
+            print(f"[DB ERROR] Не удалось сохранить данные при запуске: {res.get('reason')}")
+
         scheduler.add_job(_save_all_regions_now, "cron", minute=0)
         scheduler.start()
+    else:
+        print("[WARNING] Движок БД недоступен. Фоновое сохранение НЕ запущено.")
 
 @app.on_event("shutdown")
 async def on_shutdown():
