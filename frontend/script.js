@@ -1,5 +1,7 @@
 const ASTANA_COORDS = [51.1694, 71.4491];
 let selectedRegion = null;
+let secondRegion = null;
+let isCompareMode = false;
 let currentTheme = localStorage.getItem('theme') || 'dark';
 let currentLang = localStorage.getItem('lang') || 'kk';
 
@@ -27,7 +29,18 @@ const TRANSLATIONS = {
         dirtyTitle: "Ең лас (топ-10)",
         cleanTitle: "Ең таза (топ-10)",
         footer: "Мәліметтер IQAir API арқылы алынды • Әр 60 секунд сайын жаңартылады.",
-        status: "Мәртебесі"
+        status: "Мәртебесі",
+        compare: "Салыстыру",
+        compareTitle: "Аймақтарды салыстыру",
+        close: "Жабу",
+        aqiLevels: "AQI деңгейлері",
+        aqiLegend: "AQI деңгейлері",
+        aqiGoodDesc: "Ауа сапасы қанағаттанарлық деп саналады, ал ауаның ластануы минималды қауіп төндіреді немесе мүлдем қауіп төндірмейді.",
+        aqiModerateDesc: "Ауа сапасы қолайлы; дегенмен, кейбір ластаушы заттар үшін ауаның ластануына ерекше сезімтал адамдардың өте аз саны үшін денсаулыққа қатысты орташа қауіп болуы мүмкін.",
+        aqiSensitiveDesc: "Сезімтал топтардың мүшелері денсаулыққа әсер етуі мүмкін. Жалпы жұртшылық зардап шегуі екіталай.",
+        aqiUnhealthyDesc: "Әркім денсаулыққа әсерін тигізе бастауы мүмкін; сезімтал топтардың мүшелері денсаулыққа неғұрлым ауыр әсер етуі мүмкін.",
+        aqiVeryUnhealthyDesc: "Төтенше жағдайлардағы денсаулық туралы ескертулер. Бүкіл халық зардап шегуі мүмкін.",
+        aqiHazardousDesc: "Денсаулық туралы ескерту: әркім денсаулыққа неғұрлым ауыр әсер етуі мүмкін."
     },
     ru: {
         good: "Хорошо",
@@ -52,7 +65,18 @@ const TRANSLATIONS = {
         dirtyTitle: "Самые загрязненные (топ‑10)",
         cleanTitle: "Самые чистые (топ‑10)",
         footer: "Данные предоставлены IQAir API • Обновление каждые 60 сек.",
-        status: "Статус"
+        status: "Статус",
+        compare: "Сравнить",
+        compareTitle: "Сравнение регионов",
+        close: "Закрыть",
+        aqiLevels: "Уровни AQI",
+        aqiLegend: "Расшифровка AQI",
+        aqiGoodDesc: "Качество воздуха считается удовлетворительным, а загрязнение воздуха представляет минимальный риск или не представляет его вовсе.",
+        aqiModerateDesc: "Качество воздуха приемлемое; однако для некоторых загрязнителей может существовать умеренный риск для здоровья для очень небольшого числа людей, которые необычно чувствительны к загрязнению воздуха.",
+        aqiSensitiveDesc: "Члены чувствительных групп могут испытывать последствия для здоровья. Широкая общественность вряд ли пострадает.",
+        aqiUnhealthyDesc: "Каждый может начать испытывать последствия для здоровья; члены чувствительных групп могут испытывать более серьезные последствия для здоровья.",
+        aqiVeryUnhealthyDesc: "Предупреждения о здоровье в чрезвычайных ситуациях. Скорее всего, пострадает все население.",
+        aqiHazardousDesc: "Предупреждение о здоровье: каждый может испытывать более серьезные последствия для здоровья."
     }
 };
 
@@ -117,6 +141,37 @@ function applyLanguage() {
     document.getElementById('dirty-title').innerText = t.dirtyTitle;
     document.getElementById('clean-title').innerText = t.cleanTitle;
     document.getElementById('footer-text').innerText = t.footer;
+
+    document.getElementById('modal-title').innerText = t.aqiLevels;
+    document.getElementById('modal-close').title = t.close;
+    document.getElementById('aqi-good-label').innerText = t.good;
+    document.getElementById('aqi-good-desc').innerText = t.aqiGoodDesc;
+    document.getElementById('aqi-moderate-label').innerText = t.moderate;
+    document.getElementById('aqi-moderate-desc').innerText = t.aqiModerateDesc;
+    document.getElementById('aqi-sensitive-label').innerText = t.sensitive;
+    document.getElementById('aqi-sensitive-desc').innerText = t.aqiSensitiveDesc;
+    document.getElementById('aqi-unhealthy-label').innerText = t.unhealthy;
+    document.getElementById('aqi-unhealthy-desc').innerText = t.aqiUnhealthyDesc;
+    document.getElementById('aqi-very-unhealthy-label').innerText = t.veryUnhealthy;
+    document.getElementById('aqi-very-unhealthy-desc').innerText = t.aqiVeryUnhealthyDesc;
+    document.getElementById('aqi-hazardous-label').innerText = t.hazardous;
+    document.getElementById('aqi-hazardous-desc').innerText = t.aqiHazardousDesc;
+
+    document.getElementById('compare-btn').innerText = t.compare;
+    document.getElementById('compare-modal-title').innerText = t.compareTitle;
+    document.getElementById('compare-modal-close').title = t.close;
+    document.getElementById('compare-label-temp').innerText = t.temp;
+    document.getElementById('compare-label-hum').innerText = t.hum;
+    document.getElementById('compare-label-wind').innerText = t.wind;
+    document.getElementById('aqi-legend-btn').innerText = t.aqiLegend;
+
+    document.getElementById('legend-title').innerText = t.aqiLevels;
+    document.getElementById('leg-good').innerText = t.good;
+    document.getElementById('leg-mod').innerText = t.moderate;
+    document.getElementById('leg-sens').innerText = t.sensitive;
+    document.getElementById('leg-unhealthy').innerText = t.unhealthy;
+    document.getElementById('leg-very').innerText = t.veryUnhealthy;
+    document.getElementById('leg-haz').innerText = t.hazardous;
     
     // Refresh dynamic parts
     updateAirQuality();
@@ -154,9 +209,135 @@ function initToggles() {
     if (menuBtn && panel && overlay && closeBtn) {
         const open = () => { panel.classList.add('open'); overlay.classList.add('open'); };
         const close = () => { panel.classList.remove('open'); overlay.classList.remove('open'); };
-        menuBtn.onclick = open;
+        menuBtn.onclick = (e) => { e.stopPropagation(); open(); };
         overlay.onclick = close;
         closeBtn.onclick = close;
+
+        // Close sidebar when clicking anywhere outside it
+        document.addEventListener('click', (e) => {
+            if (panel.classList.contains('open') && !panel.contains(e.target) && e.target !== menuBtn) {
+                close();
+            }
+        });
+    }
+
+    // Modal logic
+    const aqiModal = document.getElementById('aqi-modal');
+    const compareModal = document.getElementById('compare-modal');
+    const modalOverlay = document.getElementById('modal-overlay');
+    const aqiInfoBtn = document.getElementById('aqi-info-btn');
+    const aqiLegendBtn = document.getElementById('aqi-legend-btn');
+    const modalClose = document.getElementById('modal-close');
+    const compareBtn = document.getElementById('compare-btn');
+    const compareModalClose = document.getElementById('compare-modal-close');
+
+    const openModal = (modal) => {
+        modal.classList.add('open');
+        modalOverlay.classList.add('open');
+    };
+
+    const closeModals = () => {
+        aqiModal.classList.remove('open');
+        compareModal.classList.remove('open');
+        modalOverlay.classList.remove('open');
+    };
+
+    if (aqiInfoBtn) aqiInfoBtn.onclick = () => openModal(aqiModal);
+    if (aqiLegendBtn) aqiLegendBtn.onclick = () => openModal(aqiModal);
+    if (modalClose) modalClose.onclick = closeModals;
+    if (modalOverlay) modalOverlay.onclick = closeModals;
+    if (compareModalClose) compareModalClose.onclick = closeModals;
+
+    if (compareBtn) {
+        compareBtn.onclick = (e) => {
+            e.stopPropagation();
+            isCompareMode = !isCompareMode;
+            compareBtn.classList.toggle('active');
+            if (isCompareMode) {
+                // Open side panel to let user select second region
+                panel.classList.add('open');
+                overlay.classList.add('open');
+            } else {
+                secondRegion = null;
+            }
+        };
+    }
+}
+
+function getRegionDisplayName(key, list) {
+    const r = list.find(item => item.key === key);
+    if (!r) return key;
+    return (currentLang === 'kk' && r.name_kk) ? r.name_kk : r.name;
+}
+
+async function fetchRegionData(region) {
+    const url = region ? `/api/air-quality?region=${encodeURIComponent(region)}` : '/api/air-quality';
+    const response = await fetch(url);
+    if (!response.ok) throw new Error('Ошибка сети');
+    return await response.json();
+}
+
+let cachedRegions = null;
+
+async function showComparison(region1, region2) {
+    const t = TRANSLATIONS[currentLang];
+    const compareModal = document.getElementById('compare-modal');
+    const modalOverlay = document.getElementById('modal-overlay');
+    const panel = document.getElementById('side-panel');
+    const overlay = document.getElementById('side-overlay');
+    const compareBtn = document.getElementById('compare-btn');
+    
+    // Show loading state
+    const originalText = compareBtn.innerText;
+    compareBtn.innerText = t.loading;
+    compareBtn.disabled = true;
+
+    try {
+        if (!cachedRegions) {
+            const res = await fetch('/api/regions');
+            cachedRegions = await res.json();
+        }
+
+        const [data1, data2] = await Promise.all([
+            fetchRegionData(region1),
+            fetchRegionData(region2)
+        ]);
+
+        document.getElementById('compare-region-1-name').innerText = getRegionDisplayName(region1 || "astana", cachedRegions);
+        document.getElementById('compare-region-2-name').innerText = getRegionDisplayName(region2, cachedRegions);
+
+        const aqi1 = data1.current.pollution.aqius;
+        const aqi2 = data2.current.pollution.aqius;
+        const info1 = getAQIInfo(aqi1);
+        const info2 = getAQIInfo(aqi2);
+
+        const aqi1El = document.getElementById('compare-aqi-1');
+        aqi1El.innerText = aqi1;
+        aqi1El.style.color = info1.color;
+
+        const aqi2El = document.getElementById('compare-aqi-2');
+        aqi2El.innerText = aqi2;
+        aqi2El.style.color = info2.color;
+
+        document.getElementById('compare-temp-1').innerText = `${data1.current.weather.tp}°C`;
+        document.getElementById('compare-temp-2').innerText = `${data2.current.weather.tp}°C`;
+        document.getElementById('compare-hum-1').innerText = `${data1.current.weather.hu}%`;
+        document.getElementById('compare-hum-2').innerText = `${data2.current.weather.hu}%`;
+        document.getElementById('compare-wind-1').innerText = `${data1.current.weather.ws} ${t.ms}`;
+        document.getElementById('compare-wind-2').innerText = `${data2.current.weather.ws} ${t.ms}`;
+
+        compareModal.classList.add('open');
+        modalOverlay.classList.add('open');
+        if (panel) panel.classList.remove('open');
+        if (overlay) overlay.classList.remove('open');
+    } catch (e) {
+        console.error(e);
+        alert(t.error);
+    } finally {
+        isCompareMode = false;
+        compareBtn.classList.remove('active');
+        compareBtn.innerText = t.compare;
+        compareBtn.disabled = false;
     }
 }
 
@@ -304,6 +485,11 @@ async function loadRegions() {
             }
         }
         btn.onclick = () => {
+            if (isCompareMode) {
+                secondRegion = r.key;
+                showComparison(selectedRegion, secondRegion);
+                return;
+            }
             selectedRegion = r.key;
             localStorage.setItem('region', selectedRegion);
             const params = new URLSearchParams(location.search);

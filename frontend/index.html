@@ -55,6 +55,99 @@
       </header>
 
       <div id="side-overlay" class="side-overlay"></div>
+      <div id="modal-overlay" class="side-overlay"></div>
+
+      <!-- AQI Info Modal -->
+      <div id="aqi-modal" class="modal glass">
+        <div class="modal-scroll-area">
+          <div class="side-header">
+            <div id="modal-title" class="regions-title">AQI деңгейлері</div>
+            <button id="modal-close" class="icon-btn" title="Жабу">✕</button>
+          </div>
+          <div class="aqi-scale">
+            <div class="scale-item">
+              <div class="scale-badge" style="background: var(--aqi-good)">0-50</div>
+              <div class="scale-info">
+                <div class="scale-label" id="aqi-good-label">Жақсы</div>
+                <div class="scale-desc" id="aqi-good-desc">...</div>
+              </div>
+            </div>
+            <div class="scale-item">
+              <div class="scale-badge" style="background: var(--aqi-moderate)">51-100</div>
+              <div class="scale-info">
+                <div class="scale-label" id="aqi-moderate-label">Орташа</div>
+                <div class="scale-desc" id="aqi-moderate-desc">...</div>
+              </div>
+            </div>
+            <div class="scale-item">
+              <div class="scale-badge" style="background: var(--aqi-unhealthy-sensitive)">101-150</div>
+              <div class="scale-info">
+                <div class="scale-label" id="aqi-sensitive-label">...</div>
+                <div class="scale-desc" id="aqi-sensitive-desc">...</div>
+              </div>
+            </div>
+            <div class="scale-item">
+              <div class="scale-badge" style="background: var(--aqi-unhealthy)">151-200</div>
+              <div class="scale-info">
+                <div class="scale-label" id="aqi-unhealthy-label">Зиянды</div>
+                <div class="scale-desc" id="aqi-unhealthy-desc">...</div>
+              </div>
+            </div>
+            <div class="scale-item">
+              <div class="scale-badge" style="background: var(--aqi-very-unhealthy)">201-300</div>
+              <div class="scale-info">
+                <div class="scale-label" id="aqi-very-unhealthy-label">Өте зиянды</div>
+                <div class="scale-desc" id="aqi-very-unhealthy-desc">...</div>
+              </div>
+            </div>
+            <div class="scale-item">
+              <div class="scale-badge" style="background: var(--aqi-hazardous)">300+</div>
+              <div class="scale-info">
+                <div class="scale-label" id="aqi-hazardous-label">Қауіпті</div>
+                <div class="scale-desc" id="aqi-hazardous-desc">...</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Compare Modal -->
+      <div id="compare-modal" class="modal glass">
+        <div class="modal-scroll-area">
+          <div class="side-header">
+            <div id="compare-modal-title" class="regions-title">Аймақтарды салыстыру</div>
+            <button id="compare-modal-close" class="icon-btn" title="Жабу">✕</button>
+          </div>
+          <div class="compare-container">
+            <div class="compare-header-row">
+              <div>Көрсеткіш</div>
+              <div id="compare-region-1-name">--</div>
+              <div id="compare-region-2-name">--</div>
+            </div>
+            <div class="compare-row">
+              <div class="compare-label">AQI</div>
+              <div id="compare-aqi-1" class="compare-value">--</div>
+              <div id="compare-aqi-2" class="compare-value">--</div>
+            </div>
+            <div class="compare-row">
+              <div class="compare-label" id="compare-label-temp">Температура</div>
+              <div id="compare-temp-1" class="compare-value">--</div>
+              <div id="compare-temp-2" class="compare-value">--</div>
+            </div>
+            <div class="compare-row">
+              <div class="compare-label" id="compare-label-hum">Ылғалдылық</div>
+              <div id="compare-hum-1" class="compare-value">--</div>
+              <div id="compare-hum-2" class="compare-value">--</div>
+            </div>
+            <div class="compare-row">
+              <div class="compare-label" id="compare-label-wind">Жел</div>
+              <div id="compare-wind-1" class="compare-value">--</div>
+              <div id="compare-wind-2" class="compare-value">--</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <aside id="side-panel" class="side-panel">
         <div class="side-header">
           <div id="side-title" class="regions-title">Қазақстан аймақтары</div>
@@ -89,9 +182,11 @@
           <!-- Data Panel -->
           <div class="card data-card glass">
             <div id="region-name" class="city-name">Астана, Қазақстан</div>
-            <div id="aqi-value" class="aqi-main">--</div>
+            <div id="aqi-value" class="aqi-main">-- <button id="aqi-info-btn" class="info-circle-btn" title="Инфографика AQI">?</button></div>
             <div id="aqi-caption" class="aqi-caption">Ауа сапасының индексі (AQI)</div>
             <div id="aqi-status" class="aqi-status">Жүктелуде...</div>
+            <button id="aqi-legend-btn" class="aqi-legend-btn">Расшифровка AQI</button>
+            <button id="compare-btn" class="compare-btn">Салыстыру</button>
 
             <div class="weather-grid">
               <div class="weather-item">
@@ -123,6 +218,19 @@
           <div class="card glass">
             <div id="clean-title" class="summary-title">Ең таза (топ-10)</div>
             <div id="clean-list" class="rank-list"></div>
+          </div>
+        </div>
+
+        <!-- AQI Quick Legend (New) -->
+        <div class="card glass legend-card">
+          <div class="summary-title" id="legend-title">Деңгейлер</div>
+          <div class="legend-grid">
+            <div class="legend-item"><span class="dot" style="background: var(--aqi-good)"></span><span id="leg-good">Жақсы</span></div>
+            <div class="legend-item"><span class="dot" style="background: var(--aqi-moderate)"></span><span id="leg-mod">Орташа</span></div>
+            <div class="legend-item"><span class="dot" style="background: var(--aqi-unhealthy-sensitive)"></span><span id="leg-sens">Сезімтал</span></div>
+            <div class="legend-item"><span class="dot" style="background: var(--aqi-unhealthy)"></span><span id="leg-unhealthy">Зиянды</span></div>
+            <div class="legend-item"><span class="dot" style="background: var(--aqi-very-unhealthy)"></span><span id="leg-very">Өте зиянды</span></div>
+            <div class="legend-item"><span class="dot" style="background: var(--aqi-hazardous)"></span><span id="leg-haz">Қауіпті</span></div>
           </div>
         </div>
       </main>

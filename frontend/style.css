@@ -11,6 +11,8 @@
     --scrollbar-thumb: #30363d;
     --scrollbar-thumb-hover: #484f58;
     
+    --modal-bg: rgba(22, 27, 34, 0.95);
+    
     /* AQI Colors */
     --aqi-good: #00e400;
     --aqi-moderate: #ffff00;
@@ -108,6 +110,7 @@ header {
     --scrollbar-track: #f6f8fa;
     --scrollbar-thumb: #d0d7de;
     --scrollbar-thumb-hover: #afb8c1;
+    --modal-bg: rgba(255, 255, 255, 0.95);
 }
 .regions {
     margin-bottom: 20px;
@@ -242,6 +245,248 @@ header {
     line-height: 1;
     margin-bottom: 10px;
     transition: color 0.5s ease;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.info-circle-btn {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: 1px solid var(--glass-border);
+    background: var(--card-bg);
+    color: var(--text-secondary);
+    font-size: 1rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+
+.info-circle-btn:hover {
+    background: var(--accent);
+    color: white;
+    border-color: var(--accent);
+}
+
+.compare-btn {
+    margin-bottom: 20px;
+    padding: 10px 20px;
+    border-radius: 12px;
+    border: 1px solid var(--accent);
+    background: transparent;
+    color: var(--accent);
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.compare-btn:hover {
+    background: var(--accent);
+    color: white;
+}
+
+.aqi-legend-btn {
+    margin-bottom: 10px;
+    padding: 8px 16px;
+    border-radius: 12px;
+    border: 1px solid var(--text-secondary);
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.aqi-legend-btn:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+.compare-btn.active {
+    background: #ff7e00;
+    border-color: #ff7e00;
+    color: white;
+}
+
+.legend-card {
+    margin-top: 30px;
+    padding: 24px;
+}
+
+#legend-title {
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    font-size: 0.85rem;
+    letter-spacing: 0.05em;
+    margin-bottom: 20px;
+}
+
+.legend-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 15px;
+    width: 100%;
+}
+
+@media (min-width: 1100px) {
+    .legend-grid {
+        grid-template-columns: repeat(6, 1fr);
+    }
+}
+
+@media (min-width: 600px) and (max-width: 1099px) {
+    .legend-grid {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
+@media (max-width: 600px) {
+    .legend-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 0.85rem;
+    color: var(--text-primary);
+    line-height: 1.2;
+    min-width: 0; /* Allows text to wrap properly in grid */
+}
+
+.legend-item span:not(.dot) {
+    word-break: break-word;
+    hyphens: auto;
+}
+
+.dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.modal {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(0.9);
+    width: 90%;
+    max-width: 600px;
+    max-height: 80vh;
+    z-index: 2000;
+    opacity: 0;
+    pointer-events: none;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    background: var(--modal-bg);
+    overflow: hidden; /* Prevent scrollbar from overflowing rounded corners */
+    border-radius: 24px;
+    border: 1px solid var(--glass-border);
+    backdrop-filter: blur(12px);
+    display: flex;
+    flex-direction: column;
+}
+
+.modal-scroll-area {
+    overflow-y: auto;
+    padding: 30px;
+    flex: 1;
+}
+
+/* Custom scrollbar for modal to better fit rounded corners */
+.modal-scroll-area::-webkit-scrollbar {
+    width: 6px;
+}
+
+.modal-scroll-area::-webkit-scrollbar-track {
+    background: transparent;
+    margin: 10px 0; /* Add margin to top and bottom of scrollbar track */
+}
+
+.modal-scroll-area::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb);
+    border-radius: 10px;
+}
+
+.modal.open {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translate(-50%, -50%) scale(1);
+}
+
+.aqi-scale {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    margin-top: 20px;
+}
+
+.scale-item {
+    display: flex;
+    gap: 15px;
+    align-items: flex-start;
+}
+
+.scale-badge {
+    min-width: 80px;
+    padding: 5px 10px;
+    border-radius: 8px;
+    color: #000;
+    font-weight: 700;
+    text-align: center;
+    font-size: 0.9rem;
+}
+
+.scale-label {
+    font-weight: 700;
+    margin-bottom: 4px;
+}
+
+.scale-desc {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    line-height: 1.4;
+}
+
+.compare-container {
+    width: 100%;
+}
+
+.compare-header-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 10px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--glass-border);
+    font-weight: 700;
+    text-align: center;
+}
+
+.compare-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 10px;
+    padding: 15px 0;
+    border-bottom: 1px solid var(--glass-border);
+    text-align: center;
+    align-items: center;
+}
+
+.compare-label {
+    text-align: left;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+}
+
+.compare-value {
+    font-weight: 600;
+    font-size: 1.1rem;
 }
 
 .aqi-status {
@@ -312,6 +557,7 @@ header {
     opacity: 0;
     pointer-events: none;
     transition: opacity .2s ease;
+    z-index: 1500;
 }
 .side-overlay.open {
     opacity: 1;
@@ -328,7 +574,7 @@ header {
     transform: translateX(-100%);
     transition: transform .25s ease;
     padding: 16px;
-    z-index: 1000;
+    z-index: 1600;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
     box-shadow: 0 10px 30px rgba(0,0,0,0.35);
