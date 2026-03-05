@@ -1,0 +1,34 @@
+services:
+  db:
+    image: postgres:15-alpine
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
+      POSTGRES_DB: ${POSTGRES_DB:-airmonitor}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  app:
+    build: .
+    restart: always
+    environment:
+      - WAQI_TOKEN=${WAQI_TOKEN}
+      - POSTGRES_URL=postgresql+psycopg2://${POSTGRES_USER:-user}:${POSTGRES_PASSWORD:-password}@db:5432/${POSTGRES_DB:-airmonitor}
+      - SSH_ENABLED=true
+      - SSH_PORT=2222
+      - SSH_USER=${SSH_USER:-admin}
+      - SSH_PASS=${SSH_PASS:-admin123}
+      - BACKUP_DIR=backups
+    ports:
+      - "8000:8000"
+      - "2222:2222"
+    depends_on:
+      - db
+    volumes:
+      - ./backups:/app/backups
+
+volumes:
+  postgres_data:
