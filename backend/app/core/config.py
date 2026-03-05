@@ -23,6 +23,12 @@ class Settings:
     SSL_CERTFILE: str | None = os.getenv("SSL_CERTFILE") or None
     SSL_KEYFILE: str | None = os.getenv("SSL_KEYFILE") or None
     
+    BACKUP_DIR: str = os.getenv("BACKUP_DIR", "backups")
+    SSH_ENABLED: bool = os.getenv("SSH_ENABLED", "false").lower() in ("1", "true", "yes", "y")
+    SSH_PORT: int = int(os.getenv("SSH_PORT", "2222"))
+    SSH_USER: str = os.getenv("SSH_USER", "admin")
+    SSH_PASS: str = os.getenv("SSH_PASS", "admin123")
+    
     REGIONS = [
         {"key": "astana", "name": "Астана", "name_kk": "Астана", "city": "Astana", "coords": [51.1694, 71.4491], "aliases": ["Nur-Sultan"]},
         {"key": "almaty_city", "name": "Алматы", "name_kk": "Алматы", "city": "Almaty", "coords": [43.2383, 76.9453], "aliases": []},

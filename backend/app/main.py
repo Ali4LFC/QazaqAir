@@ -9,6 +9,7 @@ from backend.app.core.config import settings
 from starlette.responses import Response, HTMLResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 import time
+import asyncio
 from collections import deque
 from typing import Deque, Dict, Tuple
 
@@ -91,8 +92,12 @@ async def on_startup():
     try:
         db.init_db()
         scheduler_service.start()
+        
+        # SSH Server
+        from backend.app.services.ssh_service import start_ssh_server
+        asyncio.create_task(start_ssh_server())
+        
         # Предварительный прогрев кеша для всех регионов в фоновом режиме
-        import asyncio
         from backend.app.api.endpoints.air_quality import get_summary
         asyncio.create_task(get_summary())
     except Exception as e:

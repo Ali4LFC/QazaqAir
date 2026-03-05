@@ -7,10 +7,14 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from backend.app.core.config import settings
 from backend.app.db.session import db
 from backend.app.services.waqi_service import waqi_service
+from backend.app.services.backup_service import backup_service
 
 class SchedulerService:
     def __init__(self):
         self.scheduler = BackgroundScheduler()
+
+    def run_backup(self):
+        backup_service.run_backup()
 
     def save_all_regions_now(self):
         if not settings.POSTGRES_URL:
@@ -69,6 +73,9 @@ class SchedulerService:
             self.scheduler.add_job(self.save_all_regions_now, 'date', run_date=run_at)
             # Hourly cron
             self.scheduler.add_job(self.save_all_regions_now, "cron", minute=0)
+            
+            # Daily backup at 03:00
+            self.scheduler.add_job(self.run_backup, "cron", hour=3, minute=0)
             print("[Scheduler] Started.")
         else:
             print("[Scheduler WARNING] DB engine not available. Background tasks NOT started.")
