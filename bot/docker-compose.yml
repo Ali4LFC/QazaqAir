@@ -1,0 +1,10 @@
+monitor_bot:
+    build: ./bot
+    restart: always
+    environment:
+      - TELEGRAM_TOKEN=8637073019:AAHVzF69UDjW14uXwCq6H5j_kMeKWcsJvvY
+      - CHAT_ID=913368592
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      - app  # <--- ВСТАВЛЯЙ СЮДА (на одном уровне с volumes)

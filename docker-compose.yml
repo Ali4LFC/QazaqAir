@@ -1,34 +1,61 @@
 services:
   db:
     image: postgres:15-alpine
+    container_name: qazaqair-db-1
     restart: always
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-user}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
-      POSTGRES_DB: ${POSTGRES_DB:-airmonitor}
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: airmonitor
     ports:
       - "5432:5432"
 
   app:
-    build: .
+    image: nginx:alpine
+    container_name: qazaqair-app-1
+    restart: always
+    ports:
+      - "8081:80"
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: qazaqair-prometheus-1
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: qazaqair-grafana-1
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: qazaqair-node-exporter-1
+    restart: unless-stopped
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.rootfs=/rootfs'
+      - '--path.sysfs=/host/sys'
+    ports:
+      - "9100:9100"
+
+  monitor_bot:
+    build: ./bot
+    container_name: qazaqair-monitor_bot-1
     restart: always
     environment:
-      - WAQI_TOKEN=${WAQI_TOKEN}
-      - POSTGRES_URL=postgresql+psycopg2://${POSTGRES_USER:-user}:${POSTGRES_PASSWORD:-password}@db:5432/${POSTGRES_DB:-airmonitor}
-      - SSH_ENABLED=true
-      - SSH_PORT=2222
-      - SSH_USER=${SSH_USER:-admin}
-      - SSH_PASS=${SSH_PASS:-admin123}
-      - BACKUP_DIR=backups
-    ports:
-      - "8000:8000"
-      - "2222:2222"
-    depends_on:
-      - db
+      - TELEGRAM_TOKEN=8637073019:AAHVzF69UDjW14uXwCq6H5j_kMeKWcsJvvY
+      - CHAT_ID=913368592
     volumes:
-      - ./backups:/app/backups
-
-volumes:
-  postgres_data:
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      - app
