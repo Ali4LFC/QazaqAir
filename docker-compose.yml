@@ -9,53 +9,22 @@ services:
       POSTGRES_DB: airmonitor
     ports:
       - "5432:5432"
+    networks:
+      - app-network
 
   app:
     image: nginx:alpine
     container_name: qazaqair-app-1
     restart: always
     ports:
-      - "8081:80"
+      - "80:80" # Changed from 8081 to 80 as it's the main app and monitoring moved
+    networks:
+      - app-network
+      - monitoring_network
 
-  prometheus:
-    image: prom/prometheus:latest
-    container_name: qazaqair-prometheus-1
-    volumes:
-      - ./prometheus.yml:/etc/prometheus/prometheus.yml
-    ports:
-      - "9090:9090"
-
-  grafana:
-    image: grafana/grafana:latest
-    container_name: qazaqair-grafana-1
-    ports:
-      - "3000:3000"
-    depends_on:
-      - prometheus
-
-  node-exporter:
-    image: prom/node-exporter:latest
-    container_name: qazaqair-node-exporter-1
-    restart: unless-stopped
-    volumes:
-      - /proc:/host/proc:ro
-      - /sys:/host/sys:ro
-      - /:/rootfs:ro
-    command:
-      - '--path.procfs=/host/proc'
-      - '--path.rootfs=/rootfs'
-      - '--path.sysfs=/host/sys'
-    ports:
-      - "9100:9100"
-
-  monitor_bot:
-    build: ./bot
-    container_name: qazaqair-monitor_bot-1
-    restart: always
-    environment:
-      - TELEGRAM_TOKEN=8637073019:AAHVzF69UDjW14uXwCq6H5j_kMeKWcsJvvY
-      - CHAT_ID=913368592
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-    depends_on:
-      - app
+networks:
+  app-network:
+    driver: bridge
+  monitoring_network:
+    external: true
+    name: monitoring_network

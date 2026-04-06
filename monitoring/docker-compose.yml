@@ -1,0 +1,270 @@
+version: '3.8'
+
+services:
+  # --- Prometheus Stack ---
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./prometheus/alert_rules.yml:/etc/prometheus/alert_rules.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+    networks:
+      - monitoring_network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: ${MEM_LIMIT_PROMETHEUS:-512M}
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: node-exporter
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - --collector.filesystem.ignored-mount-points
+      - "^/(sys|proc|dev|host|etc|rootfs/var/lib/docker/containers|rootfs/var/lib/docker/overlay2|rootfs/run/docker/netns|rootfs/var/lib/docker/aufs)($$|/)"
+    networks:
+      - monitoring_network
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "2"
+
+  blackbox-exporter:
+    image: prom/blackbox-exporter:latest
+    container_name: blackbox-exporter
+    ports:
+      - "${BLACKBOX_PORT:-9115}:9115"
+    networks:
+      - monitoring_network
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "2"
+
+  alertmanager:
+    image: prom/alertmanager:latest
+    container_name: alertmanager
+    volumes:
+      - ./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml
+    ports:
+      - "${ALERTMANAGER_PORT:-9093}:9093"
+    networks:
+      - monitoring_network
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "2"
+
+  grafana:
+    image: grafana/grafana:latest-ubuntu
+    container_name: grafana
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning
+      - grafana_data:/var/lib/grafana
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_RENDERING_SERVER_URL=http://renderer:8081/render
+      - GF_RENDERING_CALLBACK_URL=http://grafana:3000/
+      - GF_LOG_FILTERS=rendering:debug
+    ports:
+      - "${GRAFANA_PORT:-3000}:3000"
+    networks:
+      - monitoring_network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: ${MEM_LIMIT_GRAFANA:-256M}
+
+  renderer:
+    image: grafana/grafana-image-renderer:latest
+    container_name: grafana-renderer
+    ports:
+      - "8081"
+    networks:
+      - monitoring_network
+    restart: unless-stopped
+    environment:
+      - ENABLE_METRICS=true
+      - IGNORE_HTTPS_ERRORS=true
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # --- Zabbix Stack ---
+  zabbix-db:
+    image: postgres:alpine
+    container_name: zabbix-db
+    environment:
+      - POSTGRES_USER=${ZABBIX_DB_USER:-zabbix}
+      - POSTGRES_PASSWORD=${ZABBIX_DB_PASSWORD:-zabbix}
+      - POSTGRES_DB=${ZABBIX_DB_NAME:-zabbix}
+    volumes:
+      - zabbix_db_data:/var/lib/postgresql/data
+    networks:
+      - monitoring_network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: ${MEM_LIMIT_ZABBIX_DB:-256M}
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  zabbix-server:
+    image: zabbix/zabbix-server-pgsql:alpine-latest
+    container_name: zabbix-server
+    environment:
+      - DB_SERVER_HOST=zabbix-db
+      - POSTGRES_USER=${ZABBIX_DB_USER:-zabbix}
+      - POSTGRES_PASSWORD=${ZABBIX_DB_PASSWORD:-zabbix}
+      - POSTGRES_DB=${ZABBIX_DB_NAME:-zabbix}
+    ports:
+      - "10051:10051"
+    depends_on:
+      - zabbix-db
+    networks:
+      - monitoring_network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: ${MEM_LIMIT_ZABBIX_SERVER:-512M}
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  zabbix-web:
+    image: zabbix/zabbix-web-nginx-pgsql:alpine-latest
+    container_name: zabbix-web
+    environment:
+      - ZBX_SERVER_HOST=zabbix-server
+      - DB_SERVER_HOST=zabbix-db
+      - POSTGRES_USER=${ZABBIX_DB_USER:-zabbix}
+      - POSTGRES_PASSWORD=${ZABBIX_DB_PASSWORD:-zabbix}
+      - POSTGRES_DB=${ZABBIX_DB_NAME:-zabbix}
+    ports:
+      - "${ZABBIX_WEB_PORT:-8080}:8080"
+    depends_on:
+      - zabbix-server
+    networks:
+      - monitoring_network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: ${MEM_LIMIT_ZABBIX_WEB:-256M}
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # --- Nagios ---
+  nagios:
+    image: jasonrivers/nagios:latest
+    container_name: nagios
+    ports:
+      - "${NAGIOS_PORT:-8081}:80"
+    networks:
+      - monitoring_network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: ${MEM_LIMIT_NAGIOS:-256M}
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # --- Graphite ---
+  graphite:
+    image: graphiteapp/graphite-statsd:latest
+    container_name: graphite
+    ports:
+      - "${GRAPHITE_WEB_PORT:-8083}:80"
+      - "2003:2003"
+      - "8125:8125/udp"
+    volumes:
+      - graphite_data:/opt/graphite/storage
+      - graphite_statsd_data:/opt/statsd
+    networks:
+      - monitoring_network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: ${MEM_LIMIT_GRAPHITE:-512M}
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # --- Custom Monitor Bot ---
+  monitor-bot:
+    build: ./bot
+    container_name: monitor-bot
+    env_file:
+      - telegram_bot.env
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - monitoring_network
+    restart: always
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "2"
+
+networks:
+  monitoring_network:
+    external: true
+    name: monitoring_network
+
+volumes:
+  prometheus_data:
+  grafana_data:
+  zabbix_db_data:
+  graphite_data:
+  graphite_statsd_data:

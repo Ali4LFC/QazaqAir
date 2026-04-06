@@ -19,6 +19,7 @@
 - [Резервное копирование](#-резервное-копирование-бд)
 - [SSH Управление](#-ssh-управление)
 - [Запуск через Docker](#-запуск-через-docker)
+- [📊 Инфраструктура мониторинга](#-инфраструктура-мониторинга)
 - [Известные особенности](#-известные-особенности)
 - [Безопасность](#-безопасность-ssl-файрвол-rate-limit)
 - [Авторы](#-авторы)
@@ -99,6 +100,12 @@ QazaqAir/
 │   ├── index.html              — разметка
 │   ├── style.css               — стили
 │   └── script.js               — логика фронтенда
+├── monitoring/                 — 📊 Инфраструктура мониторинга (Docker Stack)
+│   ├── alertmanager/           — уведомления (Telegram)
+│   ├── grafana/                — визуализация (предустановленные дашборды)
+│   ├── prometheus/             — сбор метрик и правила алертинга
+│   └── docker-compose.yml      — манифест мониторинга
+├── bot/                        — кастомный мониторинг бот (Telegram)
 ├── requirements.txt            — зависимости
 └── README.md                   — документация
 ```
@@ -187,22 +194,6 @@ http://127.0.0.1:8001
 | `POST` | `/api/save-hourly`              | Сохранить почасовые данные в БД |
 | `GET`  | `/docs`                         | Swagger UI (автодоки)           |
 
-### Пример ответа `/api/air-quality`
-
-```json
-{
-  "city": "Aktobe",
-  "location": {
-    "type": "Point",
-    "coordinates": [57.1667, 50.2833]
-  },
-  "current": {
-    "weather": { "tp": 1, "hu": 69, "ws": 3.6 },
-    "pollution": { "aqius": 17 }
-  }
-}
-```
-
 ---
 
 ## 🎨 Интерфейс
@@ -233,9 +224,6 @@ http://127.0.0.1:8001
 - Ручной запуск: `POST /api/save-hourly` (Swagger UI)
 - Планово: каждый час (через APScheduler)
 
-> Если видите сообщение о конфликте/булевом значении — проверьте наличие уникального индекса:  
-> `CREATE UNIQUE INDEX IF NOT EXISTS uq_region_hour ON public.aqi_hourly(region_key, ts_hour);`
-
 ---
 
 ## 💾 Резервное копирование БД
@@ -264,18 +252,20 @@ BACKUP_DIR=backups
   - `backup` — запустить резервное копирование БД вручную.
   - `exit` — выйти из консоли.
 
-Настройки в `.env`:
-```env
-SSH_ENABLED=true
-SSH_PORT=2222
-SSH_USER=admin
-SSH_PASS=your_strong_password
-```
+---
 
-Пример подключения:
-```bash
-ssh admin@localhost -p 2222
-```
+## 📊 Инфраструктура мониторинга
+
+Проект включает в себя полноценную систему мониторинга на базе Docker. Все конфигурации вынесены в отдельную директорию `./monitoring`.
+
+### Ключевые сервисы:
+- **Grafana (3000)**: Визуализация с предустановленным дашбордом Node Exporter.
+- **Prometheus (9090)**: Сбор и хранение метрик.
+- **Zabbix (8080)**: Комплексный мониторинг инфраструктуры.
+- **Nagios (8081)**: Проверка состояния хостов и сервисов.
+- **Alertmanager (9093)**: Уведомления в Telegram.
+
+Подробная документация по мониторингу: [monitoring/README.md](./monitoring/README.md).
 
 ---
 
@@ -297,27 +287,11 @@ WAQI_TOKEN=ваш_токен
 docker-compose up -d --build
 ```
 
-Это создаст и запустит два контейнера:
-- `db`: PostgreSQL 15.
-- `app`: FastAPI приложение.
-
-### 3. Использование
-
-- **Веб-интерфейс**: [http://localhost:8000](http://localhost:8000)
-- **API Документация**: [http://localhost:8000/docs](http://localhost:8000/docs)
-- **SSH Управление**: `ssh admin@localhost -p 2222` (пароль `admin123`)
-
-### Полезные команды Docker
+### 3. Запуск мониторинга
 
 ```bash
-# Просмотр логов
-docker-compose logs -f app
-
-# Остановка проекта
-docker-compose down
-
-# Остановка с удалением данных БД
-docker-compose down -v
+cd monitoring
+docker-compose up -d
 ```
 
 ---
@@ -338,45 +312,19 @@ docker-compose down -v
   - `SSL_CERTFILE=backend/certs/cert.pem`
   - `SSL_KEYFILE=backend/certs/key.pem`
 - При старте в логах видно: `Open: https://127.0.0.1:8000`
-- Рекомендация для продакшна: завершать TLS на обратном прокси (nginx/caddy/traefik), в приложении выставить `TRUST_X_FORWARDED=true`.
 
 ### Фаервол (allow/deny по IP)
 - Реализован на уровне мидлвары в FastAPI.
 - Переменные окружения:
-  - `ALLOWED_IPS` — список разрешённых IP, через запятую. Если непустой — все остальные блокируются.
-  - `BLOCKED_IPS` — список запрещённых IP, через запятую (имеет приоритет на блокировку).
-  - `TRUST_X_FORWARDED` — `true/false`, доверять заголовку `X-Forwarded-For` (использовать за прокси).
-- Поведение:
-  - Для HTML‑страниц возвращается красивая страница `403` — см. `frontend/403.html`.
-  - Для `/api/*` на запрет ответ — JSON `403`.
-
-Примеры проверки:
-```bash
-# Блок локального IP
-# backend/.env: BLOCKED_IPS=127.0.0.1
-curl -I http://127.0.0.1:8000/        # 403 + HTML
-
-# Разрешить только 1.2.3.4 за прокси
-# ALLOWED_IPS=1.2.3.4; TRUST_X_FORWARDED=true
-curl -I -H "X-Forwarded-For: 1.2.3.4" http://127.0.0.1:8000/   # 200
-curl -I -H "X-Forwarded-For: 5.6.7.8" http://127.0.0.1:8000/   # 403
-```
+  - `ALLOWED_IPS` — список разрешённых IP.
+  - `BLOCKED_IPS` — список запрещённых IP.
+  - `TRUST_X_FORWARDED` — `true/false`, доверять заголовку `X-Forwarded-For`.
 
 ### Ограничение запросов (rate limit)
-- Защита от частого обращения (анти‑брут по частоте) на `/api/*`.
+- Защита от частого обращения на `/api/*`.
 - Параметры в backend/.env:
   - `RATE_LIMIT_WINDOW_SECONDS` — размер окна в секундах.
-  - `RATE_LIMIT_MAX_REQUESTS` — максимум запросов от одного IP на один путь в окне.
-- При превышении лимита возвращается `429 Too Many Requests` и заголовок `Retry-After`.
-
-Пример проверки:
-```bash
-# Пример: окно 10 сек, лимит 5
-# RATE_LIMIT_WINDOW_SECONDS=10
-# RATE_LIMIT_MAX_REQUESTS=5
-for i in {1..20}; do curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8000/api/regions; done
-# первые ~5 — 200, далее — 429
-```
+  - `RATE_LIMIT_MAX_REQUESTS` — максимум запросов от одного IP.
 
 ---
 

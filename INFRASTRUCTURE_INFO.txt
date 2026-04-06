@@ -1,0 +1,72 @@
+================================================================================
+                QAZAQAIR INFRASTRUCTURE - SERVICES & CREDENTIALS
+================================================================================
+
+[ 🌐 WEB APPLICATION ]
+--------------------------------------------------------------------------------
+Service: Frontend & API (Nginx)
+URL: http://localhost:80
+Internal Port: 80
+
+Service: PostgreSQL (Local Docker)
+Host: localhost
+Port: 5432
+User: user
+Password: password
+Database: airmonitor
+
+Service: PostgreSQL (Remote Supabase)
+Host: aws-1-ap-northeast-1.pooler.supabase.com
+Port: 5432
+User: postgres.gtbowxugcefxtckejavv
+Password: QazaqAir963%40
+
+[ 📊 MONITORING STACK ]
+--------------------------------------------------------------------------------
+Service: Grafana (Dashboards)
+URL: http://localhost:3000
+User: admin
+Password: admin
+
+Service: Prometheus (Metrics)
+URL: http://localhost:9090
+
+Service: Alertmanager (Alerts)
+URL: http://localhost:9093
+
+Service: Zabbix (Enterprise Monitoring)
+URL: http://localhost:8080
+User: Admin
+Password: zabbix
+
+Service: Nagios (Service Monitoring)
+URL: http://localhost:8081
+User: nagiosadmin
+Password: nagios
+
+Service: Graphite (Custom Metrics)
+URL: http://localhost:8083 (Web)
+Ports: 2003 (Carbon), 8125 (StatsD)
+
+[ 🤖 TELEGRAM BOT ]
+--------------------------------------------------------------------------------
+Bot Name: @mygrafana_wpg_bot
+Token: 8680036628:AAHLkFH2PsRBQUW3A4xWeimwD5T-J9-vXoo
+Allowed User ID: 7451510777
+Chat ID: 7451510777
+
+[ 🛡️ OPS & SECURITY ]
+--------------------------------------------------------------------------------
+SSH Management:
+Host: localhost
+Port: 2222
+User: admin
+Password: admin123
+
+Exporters:
+- Node Exporter: http://localhost:9100 (Host metrics)
+- Blackbox Exporter: http://localhost:9115 (Uptime checks)
+
+================================================================================
+Generated on: 2026-04-06
+================================================================================
