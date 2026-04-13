@@ -1,4 +1,4 @@
-import { StrictMode, useState, useEffect, createContext, useContext, useMemo, Component, type ReactNode } from 'react'
+import { useState, useEffect, createContext, useContext, useMemo, Component, type ReactNode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import { ThemeProvider } from '@mui/material/styles';
@@ -92,9 +92,7 @@ if (!rootElement) {
 }
 
 createRoot(rootElement).render(
-  <StrictMode>
-    <ErrorBoundary>
-      <ThemedApp />
-    </ErrorBoundary>
-  </StrictMode>,
+  <ErrorBoundary>
+    <ThemedApp />
+  </ErrorBoundary>,
 );

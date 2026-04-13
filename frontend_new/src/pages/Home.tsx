@@ -125,8 +125,34 @@ export function Home() {
 
   const t = TRANSLATIONS[lang];
 
-  // Load initial data
+  // Sync selectedRegion with user's city_key when it changes
   useEffect(() => {
+    if (user?.city_key && user.city_key !== selectedRegion) {
+      setSelectedRegion(user.city_key);
+      localStorage.setItem('region', user.city_key);
+      // Clear cache for old region to force reload
+      setAirQuality(null);
+      setIsLoading(true);
+    }
+  }, [user?.city_key]);
+
+  // Load cached data first, then fetch fresh data
+  useEffect(() => {
+    // Try to load cached data immediately
+    const cachedAQ = localStorage.getItem(`aq_${selectedRegion}`);
+    const cachedSummary = localStorage.getItem('aq_summary');
+    if (cachedAQ) {
+      try {
+        setAirQuality(JSON.parse(cachedAQ));
+        setIsLoading(false); // Show cached data immediately
+      } catch (e) { /* ignore invalid cache */ }
+    }
+    if (cachedSummary) {
+      try {
+        setSummary(JSON.parse(cachedSummary));
+      } catch (e) { /* ignore invalid cache */ }
+    }
+
     const loadInitialData = async () => {
       try {
         const [aqData, summaryData] = await Promise.all([
@@ -135,7 +161,10 @@ export function Home() {
         ]);
         setAirQuality(aqData);
         setSummary(summaryData);
-        
+        // Cache the data
+        localStorage.setItem(`aq_${selectedRegion}`, JSON.stringify(aqData));
+        localStorage.setItem('aq_summary', JSON.stringify(summaryData));
+
         try {
           const res = await fetch('https://raw.githubusercontent.com/johan/world.geo.json/master/countries/KAZ.geo.json');
           const geo = await res.json();
@@ -331,6 +360,7 @@ export function Home() {
           <Grid size={{ xs: 12, lg: 8 }}>
             <Card sx={{ ...glassCardSx, height: '400px', overflow: 'hidden' }}>
               <MapContainer
+                key={selectedRegion}
                 center={currentRegion.coords}
                 zoom={11}
                 style={{ height: '400px', width: '100%' }}
