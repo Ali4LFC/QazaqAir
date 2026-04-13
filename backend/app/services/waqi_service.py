@@ -1,7 +1,7 @@
 import httpx
 from fastapi import HTTPException
 from datetime import datetime, timedelta
-from backend.app.core.config import settings
+from app.core.config import settings
 
 class WAQIService:
     def __init__(self):

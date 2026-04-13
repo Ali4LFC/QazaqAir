@@ -1,7 +1,7 @@
 import asyncio
 import asyncssh
 import sys
-from backend.app.core.config import settings
+from app.core.config import settings
 
 class SSHServer(asyncssh.SSHServer):
     def password_auth_supported(self):
@@ -34,7 +34,7 @@ def handle_client(process):
             process.stdout.write(f'WAQI Token: {"Set" if settings.WAQI_TOKEN else "Not set"}\n')
         elif cmd == 'backup':
             process.stdout.write('Starting manual backup...\n')
-            from backend.app.services.backup_service import backup_service
+            from app.services.backup_service import backup_service
             path = backup_service.run_backup()
             if path:
                 process.stdout.write(f'Backup created: {path}\n')

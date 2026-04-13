@@ -4,10 +4,10 @@ from fastapi.responses import JSONResponse
 import httpx
 from sqlalchemy import select, inspect
 from sqlalchemy.exc import SQLAlchemyError
-from backend.app.core.config import settings
-from backend.app.services.waqi_service import waqi_service
-from backend.app.services.scheduler import scheduler_service
-from backend.app.db.session import db
+from app.core.config import settings
+from app.services.waqi_service import waqi_service
+from app.services.scheduler import scheduler_service
+from app.db.session import db
 
 router = APIRouter()
 

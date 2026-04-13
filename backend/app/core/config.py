@@ -29,6 +29,8 @@ class Settings:
     SSH_USER: str = os.getenv("SSH_USER", "admin")
     SSH_PASS: str = os.getenv("SSH_PASS", "admin123")
     
+    SECRET_KEY: str = os.getenv("SECRET_KEY", "your-secret-key-change-in-production")
+    
     REGIONS = [
         {"key": "astana", "name": "Астана", "name_kk": "Астана", "city": "Astana", "coords": [51.1694, 71.4491], "aliases": ["Nur-Sultan"]},
         {"key": "almaty_city", "name": "Алматы", "name_kk": "Алматы", "city": "Almaty", "coords": [43.2383, 76.9453], "aliases": []},

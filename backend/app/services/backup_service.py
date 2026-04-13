@@ -2,7 +2,7 @@ import os
 import subprocess
 from datetime import datetime
 from pathlib import Path
-from backend.app.core.config import settings
+from app.core.config import settings
 
 class BackupService:
     def __init__(self, backup_dir: str = settings.BACKUP_DIR):

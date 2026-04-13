@@ -6,3 +6,7 @@ SQLAlchemy
 psycopg2-binary
 apscheduler
 asyncssh
+python-jose[cryptography]
+passlib[bcrypt]
+python-multipart
+email-validator

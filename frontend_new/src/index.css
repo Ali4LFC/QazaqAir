@@ -1,0 +1,99 @@
+@import "tailwindcss";
+
+@theme {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji",
+    "Segoe UI Symbol", "Noto Color Emoji";
+
+  /* AQI Colors */
+  --color-aqi-good: #00e400;
+  --color-aqi-moderate: #ffff00;
+  --color-aqi-sensitive: #ff7e00;
+  --color-aqi-unhealthy: #ff0000;
+  --color-aqi-very-unhealthy: #8f3f97;
+  --color-aqi-hazardous: #7e0023;
+}
+
+:root {
+  --background: #ffffff;
+  --foreground: #0a0a0a;
+  --card: #ffffff;
+  --card-foreground: #0a0a0a;
+  --popover: #ffffff;
+  --popover-foreground: #0a0a0a;
+  --primary: #0a0a0a;
+  --primary-foreground: #fafafa;
+  --secondary: #f5f5f5;
+  --secondary-foreground: #0a0a0a;
+  --muted: #f5f5f5;
+  --muted-foreground: #737373;
+  --accent: #f5f5f5;
+  --accent-foreground: #0a0a0a;
+  --destructive: #ef4444;
+  --destructive-foreground: #fafafa;
+  --border: #e5e5e5;
+  --input: #e5e5e5;
+  --ring: #0a0a0a;
+  --radius: 0.5rem;
+}
+
+.dark {
+  --background: #0a0a0a;
+  --foreground: #fafafa;
+  --card: #0a0a0a;
+  --card-foreground: #fafafa;
+  --popover: #0a0a0a;
+  --popover-foreground: #fafafa;
+  --primary: #fafafa;
+  --primary-foreground: #171717;
+  --secondary: #262626;
+  --secondary-foreground: #fafafa;
+  --muted: #262626;
+  --muted-foreground: #a3a3a3;
+  --accent: #262626;
+  --accent-foreground: #fafafa;
+  --destructive: #7f1d1d;
+  --destructive-foreground: #fafafa;
+  --border: #262626;
+  --input: #262626;
+  --ring: #d4d4d4;
+}
+
+* {
+  border-color: var(--border);
+}
+
+/* Body styles handled by MUI CssBaseline */
+
+/* AQI Marker styles */
+.aqi-marker {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  color: #000;
+  border: 2px solid white;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+}
+
+/* Leaflet custom styles */
+.leaflet-container {
+  background: transparent;
+}
+
+/* Glass effect */
+.glass {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.dark .glass {
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}

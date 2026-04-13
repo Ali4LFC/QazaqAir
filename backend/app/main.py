@@ -1,11 +1,12 @@
 from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
-from backend.app.api.endpoints import air_quality
-from backend.app.db.session import db
-from backend.app.services.scheduler import scheduler_service
-from backend.app.core.config import settings
+from app.api.endpoints import air_quality, auth
+from app.db.session import db
+from app.services.scheduler import scheduler_service
+from app.core.config import settings
 from starlette.responses import Response, HTMLResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 import time
@@ -14,6 +15,15 @@ from collections import deque
 from typing import Deque, Dict, Tuple
 
 app = FastAPI(title=settings.PROJECT_NAME)
+
+# CORS middleware for frontend
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],  # Vite dev server
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 class FirewallMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
@@ -35,12 +45,12 @@ class FirewallMiddleware(BaseHTTPMiddleware):
         if settings.ALLOWED_IPS and ip not in settings.ALLOWED_IPS:
             accepts_html = "text/html" in (request.headers.get("accept", "").lower())
             if accepts_html and not path.startswith("/api"):
-                return FileResponse("frontend/403.html", status_code=403, media_type="text/html")
+                return FileResponse("../frontend_new/403.html", status_code=403, media_type="text/html")
             return JSONResponse({"detail": "forbidden"}, status_code=403)
         if settings.BLOCKED_IPS and ip in settings.BLOCKED_IPS:
             accepts_html = "text/html" in (request.headers.get("accept", "").lower())
             if accepts_html and not path.startswith("/api"):
-                return FileResponse("frontend/403.html", status_code=403, media_type="text/html")
+                return FileResponse("../frontend_new/403.html", status_code=403, media_type="text/html")
             return JSONResponse({"detail": "forbidden"}, status_code=403)
         return await call_next(request)
 
@@ -83,9 +93,11 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 app.add_middleware(FirewallMiddleware)
 app.add_middleware(RateLimitMiddleware)
 
+# API Routers
 app.include_router(air_quality.router, prefix="/api")
+app.include_router(auth.router, prefix="/api/auth")
 
-app.mount("/static", StaticFiles(directory="frontend"), name="static")
+app.mount("/static", StaticFiles(directory="../frontend_new"), name="static")
 
 @app.on_event("startup")
 async def on_startup():
@@ -94,11 +106,11 @@ async def on_startup():
         scheduler_service.start()
         
         # SSH Server
-        from backend.app.services.ssh_service import start_ssh_server
+        from app.services.ssh_service import start_ssh_server
         asyncio.create_task(start_ssh_server())
         
         # Предварительный прогрев кеша для всех регионов в фоновом режиме
-        from backend.app.api.endpoints.air_quality import get_summary
+        from app.api.endpoints.air_quality import get_summary
         asyncio.create_task(get_summary())
     except Exception as e:
         print(f"[STARTUP ERROR] {e}")
@@ -109,20 +121,26 @@ async def on_shutdown():
 
 @app.get("/")
 async def read_index():
-    return FileResponse("frontend/index.html")
+    return FileResponse("../frontend_new/index.html")
 
 if __name__ == "__main__":
+    import os
+    
+    # Check if SSL files actually exist
+    ssl_certfile = settings.SSL_CERTFILE if settings.SSL_CERTFILE and os.path.exists(settings.SSL_CERTFILE) else None
+    ssl_keyfile = settings.SSL_KEYFILE if settings.SSL_KEYFILE and os.path.exists(settings.SSL_KEYFILE) else None
+    
     print("=" * 50)
     print(f" {settings.PROJECT_NAME} starting...")
     print(f" Token: {'SET' if settings.WAQI_TOKEN else 'NOT SET!'}")
-    scheme = "https" if (settings.SSL_CERTFILE and settings.SSL_KEYFILE) else "http"
+    scheme = "https" if (ssl_certfile and ssl_keyfile) else "http"
     print(f" Open: {scheme}://127.0.0.1:8000")
     print("=" * 50)
     uvicorn.run(
-        "backend.app.main:app",
+        "app.main:app",
         host="0.0.0.0",
         port=8000,
         reload=True,
-        ssl_certfile=settings.SSL_CERTFILE,
-        ssl_keyfile=settings.SSL_KEYFILE,
+        ssl_certfile=ssl_certfile,
+        ssl_keyfile=ssl_keyfile,
     )

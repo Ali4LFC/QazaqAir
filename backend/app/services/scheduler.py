@@ -4,10 +4,10 @@ import psycopg2
 from psycopg2.extras import execute_values
 from urllib.parse import urlparse, unquote
 from apscheduler.schedulers.background import BackgroundScheduler
-from backend.app.core.config import settings
-from backend.app.db.session import db
-from backend.app.services.waqi_service import waqi_service
-from backend.app.services.backup_service import backup_service
+from app.core.config import settings
+from app.db.session import db
+from app.services.waqi_service import waqi_service
+from app.services.backup_service import backup_service
 
 class SchedulerService:
     def __init__(self):
