@@ -9,18 +9,142 @@ services:
       POSTGRES_DB: airmonitor
     ports:
       - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
     networks:
       - app-network
+
+  graphite:
+    image: graphiteapp/graphite-statsd:latest
+    container_name: qazaqair-graphite-1
+    restart: always
+    ports:
+      - "2003:2003"
+      - "8082:80"
+      - "8125:8125/udp"
+    networks:
+      - app-network
+
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: qazaqair-n8n-1
+    restart: always
+    environment:
+      - N8N_PATH=/n8n/
+      - DB_TYPE=postgresdb
+      - DB_POSTGRESDB_HOST=db
+      - DB_POSTGRESDB_PORT=5432
+      - DB_POSTGRESDB_DATABASE=airmonitor
+      - DB_POSTGRESDB_USER=user
+      - DB_POSTGRESDB_PASSWORD=password
+      - N8N_HOST=localhost
+      - N8N_PORT=5678
+      - WEBHOOK_URL=http://localhost/n8n/
+    volumes:
+      - n8n_data:/home/node/.n8n
+    networks:
+      - app-network
+    depends_on:
+      - db
+
+  zabbix-db:
+    image: postgres:15-alpine
+    container_name: zabbix-db
+    restart: always
+    environment:
+      POSTGRES_USER: zabbix
+      POSTGRES_PASSWORD: zabbix_password
+      POSTGRES_DB: zabbix
+    networks:
+      - app-network
+
+  zabbix-server:
+    image: zabbix/zabbix-server-pgsql:alpine-6.4-latest
+    container_name: zabbix-server
+    restart: always
+    environment:
+      DB_SERVER_HOST: zabbix-db
+      POSTGRES_USER: zabbix
+      POSTGRES_PASSWORD: zabbix_password
+      POSTGRES_DB: zabbix
+    ports:
+      - "10051:10051"
+    networks:
+      - app-network
+    depends_on:
+      - zabbix-db
+
+  zabbix-web:
+    image: zabbix/zabbix-web-nginx-pgsql:alpine-6.4-latest
+    container_name: zabbix-web
+    restart: always
+    environment:
+      ZBX_SERVER_HOST: zabbix-server
+      DB_SERVER_HOST: zabbix-db
+      POSTGRES_USER: zabbix
+      POSTGRES_PASSWORD: zabbix_password
+      POSTGRES_DB: zabbix
+      PHP_TZ: "Asia/Almaty"
+    ports:
+      - "8080:8080"
+    networks:
+      - app-network
+    depends_on:
+      - zabbix-server
 
   app:
     image: nginx:alpine
     container_name: qazaqair-app-1
     restart: always
     ports:
-      - "80:80" # Changed from 8081 to 80 as it's the main app and monitoring moved
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./backend/certs:/etc/nginx/ssl:ro
+      - ./html:/usr/share/nginx/html:ro # Сюда положи свой сайт (index.html и т.д.)
     networks:
       - app-network
       - monitoring_network
+    depends_on:
+      - db
+
+  portainer:
+    image: portainer/portainer-ce:latest
+    container_name: portainer
+    restart: always
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - portainer_data:/data
+    ports:
+      - "9000:9000"
+    networks:
+      - app-network
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: qazaqair-prometheus-1
+    restart: always
+    user: "root"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+    networks:
+      - app-network
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: qazaqair-grafana-1
+    restart: always
+    user: "root"
+    ports:
+      - "3000:3000"
+    networks:
+      - app-network
+    depends_on:
+      - prometheus
+      - graphite
 
 networks:
   app-network:
@@ -28,3 +152,8 @@ networks:
   monitoring_network:
     external: true
     name: monitoring_network
+
+volumes:
+  portainer_data:
+  postgres_data:
+  n8n_data:

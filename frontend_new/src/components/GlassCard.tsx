@@ -1,4 +1,4 @@
-import { Paper, PaperProps, styled } from '@mui/material';
+import { Paper, type PaperProps, styled } from '@mui/material';
 
 export const GlassCard = styled(Paper)<PaperProps>(({ theme }) => ({
   background: theme.palette.mode === 'dark' 

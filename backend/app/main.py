@@ -2,6 +2,7 @@ from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+import os
 import uvicorn
 from app.api.endpoints import air_quality, auth
 from app.db.session import db
@@ -13,6 +14,11 @@ import time
 import asyncio
 from collections import deque
 from typing import Deque, Dict, Tuple
+
+# Try multiple possible paths for frontend_new
+frontend_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../frontend_new"))
+if not os.path.exists(frontend_path):
+    frontend_path = "frontend_new" # Fallback to current directory
 
 app = FastAPI(title=settings.PROJECT_NAME)
 
@@ -45,12 +51,18 @@ class FirewallMiddleware(BaseHTTPMiddleware):
         if settings.ALLOWED_IPS and ip not in settings.ALLOWED_IPS:
             accepts_html = "text/html" in (request.headers.get("accept", "").lower())
             if accepts_html and not path.startswith("/api"):
-                return FileResponse("../frontend_new/403.html", status_code=403, media_type="text/html")
+                html_403 = os.path.join(frontend_path, "403.html")
+                if os.path.exists(html_403):
+                    return FileResponse(html_403, status_code=403, media_type="text/html")
+                return HTMLResponse("<h1>403 Forbidden</h1>", status_code=403)
             return JSONResponse({"detail": "forbidden"}, status_code=403)
         if settings.BLOCKED_IPS and ip in settings.BLOCKED_IPS:
             accepts_html = "text/html" in (request.headers.get("accept", "").lower())
             if accepts_html and not path.startswith("/api"):
-                return FileResponse("../frontend_new/403.html", status_code=403, media_type="text/html")
+                html_403 = os.path.join(frontend_path, "403.html")
+                if os.path.exists(html_403):
+                    return FileResponse(html_403, status_code=403, media_type="text/html")
+                return HTMLResponse("<h1>403 Forbidden</h1>", status_code=403)
             return JSONResponse({"detail": "forbidden"}, status_code=403)
         return await call_next(request)
 
@@ -97,7 +109,11 @@ app.add_middleware(RateLimitMiddleware)
 app.include_router(air_quality.router, prefix="/api")
 app.include_router(auth.router, prefix="/api/auth")
 
-app.mount("/static", StaticFiles(directory="../frontend_new"), name="static")
+if os.path.exists(frontend_path):
+    app.mount("/static", StaticFiles(directory=frontend_path), name="static")
+else:
+    print(f"[WARNING] Frontend directory not found at {frontend_path}")
+
 
 @app.on_event("startup")
 async def on_startup():
@@ -121,11 +137,12 @@ async def on_shutdown():
 
 @app.get("/")
 async def read_index():
-    return FileResponse("../frontend_new/index.html")
+    index_path = os.path.join(frontend_path, "index.html")
+    if os.path.exists(index_path):
+        return FileResponse(index_path)
+    return HTMLResponse("<h1>Backend is running!</h1><p>Frontend not found.</p>")
 
 if __name__ == "__main__":
-    import os
-    
     # Check if SSL files actually exist
     ssl_certfile = settings.SSL_CERTFILE if settings.SSL_CERTFILE and os.path.exists(settings.SSL_CERTFILE) else None
     ssl_keyfile = settings.SSL_KEYFILE if settings.SSL_KEYFILE and os.path.exists(settings.SSL_KEYFILE) else None

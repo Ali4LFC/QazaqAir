@@ -7,7 +7,7 @@ WORKDIR /app
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE 1
 ENV PYTHONUNBUFFERED 1
-ENV PYTHONPATH=/app
+ENV PYTHONPATH=/app/backend
 
 # Install system dependencies for psycopg2 and pg_dump
 RUN apt-get update && apt-get install -y --no-install-recommends \

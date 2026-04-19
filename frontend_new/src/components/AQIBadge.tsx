@@ -1,7 +1,7 @@
-import { Chip, ChipProps } from '@mui/material';
+import { Chip, type ChipProps } from '@mui/material';
 import { getAQIColor, getAQILabel } from '@/lib/utils';
 
-interface AQIBadgeProps extends Omit<ChipProps, 'label' | 'color'> {
+interface AQIBadgeProps extends Omit<ChipProps, 'label' | 'color' | 'size'> {
   aqi: number | null;
   lang?: 'ru' | 'kk';
   size?: 'small' | 'medium' | 'large';
