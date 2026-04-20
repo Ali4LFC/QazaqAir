@@ -22,6 +22,8 @@ import {
   Grid,
   keyframes,
   useTheme,
+  MenuItem,
+  Select,
 } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
 import PersonIcon from '@mui/icons-material/Person';
@@ -398,20 +400,23 @@ export function Home() {
                         '& .MuiInputBase-root': {
                           bgcolor: 'rgba(22, 27, 34, 0.8)',
                           borderRadius: '12px',
-                        }
+                          color: '#f0f6fc',
+                        },
+                        '& .MuiOutlinedInput-notchedOutline': {
+                          borderColor: 'rgba(255, 255, 255, 0.2)',
+                        },
                       }}
                     >
                       {REGIONS.filter(r => r.key !== selectedRegion).map((region) => {
                         const summaryItem = summary?.dirty.find(d => d.key === region.key) || 
                                            summary?.clean.find(c => c.key === region.key);
                         const aqi = summaryItem?.aqi;
-                        const info = aqi ? getAQIInfo(aqi) : null;
                         const name = lang === 'kk' && region.name_kk ? region.name_kk : region.name;
                         
                         return (
-                          <option key={region.key} value={region.key}>
+                          <MenuItem key={region.key} value={region.key}>
                             {name} {aqi ? `(AQI: ${aqi})` : ''}
-                          </option>
+                          </MenuItem>
                         );
                       })}
                     </TextField>
