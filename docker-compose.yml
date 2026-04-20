@@ -14,6 +14,38 @@ services:
     networks:
       - app-network
 
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: qazaqair-backend-1
+    restart: always
+    environment:
+      - DATABASE_URL=postgresql://user:password@db:5432/airmonitor
+      - SSL_CERTFILE=/app/backend/certs/cert.pem
+      - SSL_KEYFILE=/app/backend/certs/key.pem
+    ports:
+      - "8000:8000"
+      - "2222:2222"
+    volumes:
+      - ./backend:/app/backend
+      - ./backend/certs:/app/backend/certs
+    networks:
+      - app-network
+    depends_on:
+      - db
+
+  frontend_new:
+    build:
+      context: ./frontend_new
+      dockerfile: Dockerfile
+    container_name: qazaqair-frontend-1
+    restart: always
+    ports:
+      - "3001:80"
+    networks:
+      - app-network
+
   graphite:
     image: graphiteapp/graphite-statsd:latest
     container_name: qazaqair-graphite-1
@@ -108,6 +140,8 @@ services:
       - monitoring_network
     depends_on:
       - db
+      - backend
+      - frontend_new
 
   portainer:
     image: portainer/portainer-ce:latest

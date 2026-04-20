@@ -120,7 +120,8 @@ export function Home() {
   const [searchQuery, setSearchQuery] = useState('');
   const [showAQIModal, setShowAQIModal] = useState(false);
   const [compareMode, setCompareMode] = useState(false);
-  const [, setCompareRegion] = useState<string | null>(null);
+  const [compareRegion, setCompareRegion] = useState<string | null>(null);
+  const [compareAirQuality, setCompareAirQuality] = useState<AirQualityData | null>(null);
   const [kazakhstanGeo, setKazakhstanGeo] = useState<any>(null);
 
   const t = TRANSLATIONS[lang];
@@ -184,16 +185,28 @@ export function Home() {
     return () => clearInterval(interval);
   }, [selectedRegion, t.error]);
 
-  const handleRegionSelect = useCallback((regionKey: string) => {
-    if (compareMode) {
-      setCompareRegion(regionKey);
-      setCompareMode(false);
+  // Load compare region data when compareRegion changes
+  useEffect(() => {
+    if (compareRegion && compareRegion !== selectedRegion) {
+      const loadCompareData = async () => {
+        try {
+          const compareData = await airQualityApi.getCurrent(compareRegion);
+          setCompareAirQuality(compareData);
+        } catch (err) {
+          console.error('Failed to load compare data:', err);
+        }
+      };
+      loadCompareData();
     } else {
-      setSelectedRegion(regionKey);
-      localStorage.setItem('region', regionKey);
+      setCompareAirQuality(null);
     }
+  }, [compareRegion, selectedRegion]);
+
+  const handleRegionSelect = useCallback((regionKey: string) => {
+    setSelectedRegion(regionKey);
+    localStorage.setItem('region', regionKey);
     setSidebarOpen(false);
-  }, [compareMode]);
+  }, []);
 
   const toggleLang = () => {
     const newLang = lang === 'ru' ? 'kk' : 'ru';
@@ -209,6 +222,11 @@ export function Home() {
   const currentRegion = REGIONS.find(r => r.key === selectedRegion) || REGIONS[0];
   const aqiInfo = airQuality ? getAQIInfo(airQuality.current.pollution.aqius) : null;
   const displayName = lang === 'kk' && currentRegion.name_kk ? currentRegion.name_kk : currentRegion.name;
+  
+  // Compare region data
+  const compareRegionData = compareRegion ? REGIONS.find(r => r.key === compareRegion) : null;
+  const compareAqiInfo = compareAirQuality ? getAQIInfo(compareAirQuality.current.pollution.aqius) : null;
+  const compareDisplayName = compareRegionData && lang === 'kk' && compareRegionData.name_kk ? compareRegionData.name_kk : compareRegionData?.name || '';
 
   if (isLoading) {
     return (
@@ -240,7 +258,7 @@ export function Home() {
             </Typography>
           </Box>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <IconButton onClick={() => setSidebarOpen(true)} color="inherit">
+            <IconButton onClick={() => setSidebarOpen(!sidebarOpen)} color="inherit">
               <MenuIcon />
             </IconButton>
             <IconButton onClick={toggleLang} color="inherit">
@@ -340,7 +358,10 @@ export function Home() {
                 <Button
                   variant="outlined"
                   fullWidth
-                  onClick={() => setCompareMode(!compareMode)}
+                  onClick={() => {
+                    console.log('Compare button clicked, current mode:', compareMode);
+                    setCompareMode(!compareMode);
+                  }}
                   startIcon={<CompareArrowsIcon />}
                   sx={{ mb: 1 }}
                 >
@@ -348,9 +369,127 @@ export function Home() {
                 </Button>
 
                 {compareMode && (
-                  <Typography variant="body2" color="text.secondary" align="center">
-                    {lang === 'ru' ? 'Выберите второй регион из списка' : 'Тізімнен екінші аймақты таңдаңыз'}
-                  </Typography>
+                  <Box sx={{ mt: 2, p: 2, bgcolor: 'rgba(31, 35, 41, 0.8)', borderRadius: '12px' }}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                      <Typography variant="body2" color="text.secondary">
+                        {lang === 'ru' ? 'Выберите регион для сравнения:' : 'Салыстыру үшін аймақты таңдаңыз:'}
+                      </Typography>
+                      <IconButton 
+                        size="small" 
+                        onClick={() => setCompareMode(false)}
+                      >
+                        <CloseIcon fontSize="small" />
+                      </IconButton>
+                    </Box>
+                    
+                    <TextField
+                      fullWidth
+                      size="small"
+                      select
+                      value={compareRegion || ''}
+                      onChange={(e) => {
+                        const region = e.target.value;
+                        if (region) {
+                          setCompareRegion(region);
+                          setCompareMode(false);
+                        }
+                      }}
+                      sx={{
+                        '& .MuiInputBase-root': {
+                          bgcolor: 'rgba(22, 27, 34, 0.8)',
+                          borderRadius: '12px',
+                        }
+                      }}
+                    >
+                      {REGIONS.filter(r => r.key !== selectedRegion).map((region) => {
+                        const summaryItem = summary?.dirty.find(d => d.key === region.key) || 
+                                           summary?.clean.find(c => c.key === region.key);
+                        const aqi = summaryItem?.aqi;
+                        const info = aqi ? getAQIInfo(aqi) : null;
+                        const name = lang === 'kk' && region.name_kk ? region.name_kk : region.name;
+                        
+                        return (
+                          <option key={region.key} value={region.key}>
+                            {name} {aqi ? `(AQI: ${aqi})` : ''}
+                          </option>
+                        );
+                      })}
+                    </TextField>
+                  </Box>
+                )}
+
+                {/* Compare Section */}
+                {compareAirQuality && compareRegionData && !compareMode && (
+                  <Box sx={{ mt: 2, p: 2, bgcolor: 'rgba(31, 35, 41, 0.8)', borderRadius: '12px' }}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                      <Typography variant="body2" color="text.secondary">
+                        {lang === 'ru' ? 'Сравнение с:' : 'Салыстыру:'}
+                      </Typography>
+                      <IconButton 
+                        size="small" 
+                        onClick={() => {
+                          setCompareRegion(null);
+                          setCompareAirQuality(null);
+                        }}
+                      >
+                        <CloseIcon fontSize="small" />
+                      </IconButton>
+                    </Box>
+                    
+                    <Typography variant="body2" sx={{ fontWeight: 600, mb: 1 }}>
+                      {compareDisplayName}
+                    </Typography>
+                    
+                    <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1, mb: 1 }}>
+                      <Typography
+                        variant="h5"
+                        sx={{
+                          fontSize: '2rem',
+                          fontWeight: 700,
+                          color: compareAqiInfo?.color || '#888',
+                        }}
+                      >
+                        {compareAirQuality.current.pollution.aqius}
+                      </Typography>
+                      <Chip
+                        label={getAQIText(compareAirQuality.current.pollution.aqius, lang)}
+                        size="small"
+                        sx={{
+                          backgroundColor: compareAqiInfo ? `${compareAqiInfo.color}33` : '#88888833',
+                          color: compareAqiInfo?.color || '#888',
+                          fontWeight: 600,
+                          borderRadius: '8px',
+                        }}
+                      />
+                    </Box>
+                    
+                    <Grid container spacing={1}>
+                      <Grid size={{ xs: 4 }}>
+                        <Box sx={{ textAlign: 'center', p: 1, bgcolor: 'rgba(22, 27, 34, 0.8)', borderRadius: '6px' }}>
+                          <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>{t.temp}</Typography>
+                          <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                            {compareAirQuality.current.weather.tp || '--'}°C
+                          </Typography>
+                        </Box>
+                      </Grid>
+                      <Grid size={{ xs: 4 }}>
+                        <Box sx={{ textAlign: 'center', p: 1, bgcolor: 'rgba(22, 27, 34, 0.8)', borderRadius: '6px' }}>
+                          <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>{t.hum}</Typography>
+                          <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                            {compareAirQuality.current.weather.hu || '--'}%
+                          </Typography>
+                        </Box>
+                      </Grid>
+                      <Grid size={{ xs: 4 }}>
+                        <Box sx={{ textAlign: 'center', p: 1, bgcolor: 'rgba(22, 27, 34, 0.8)', borderRadius: '6px' }}>
+                          <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>{t.wind}</Typography>
+                          <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                            {compareAirQuality.current.weather.ws || '--'} {t.ms}
+                          </Typography>
+                        </Box>
+                      </Grid>
+                    </Grid>
+                  </Box>
                 )}
               </CardContent>
             </Card>
