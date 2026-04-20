@@ -174,7 +174,7 @@ services:
       POSTGRES_DB: zabbix
       PHP_TZ: "Asia/Almaty"
     ports:
-      - "8086:8080"
+      - "8080:8080"
     networks:
       - app-network
     depends_on:
@@ -201,6 +201,7 @@ services:
       - ./html:/usr/share/nginx/html:ro
     networks:
       - app-network
+      - monitoring_network
     depends_on:
       - db
       - backend
@@ -240,15 +241,7 @@ services:
     restart: always
     user: "root"
     volumes:
-      - ./monitoring/prometheus/prometheus-enhanced.yml:/etc/prometheus/prometheus.yml:ro
-      - prometheus_data:/prometheus
-    command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
-      - '--storage.tsdb.path=/prometheus'
-      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
-      - '--web.console.templates=/usr/share/prometheus/consoles'
-      - '--storage.tsdb.retention.time=30d'
-      - '--storage.tsdb.retention.size=10GB'
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
     ports:
       - "9090:9090"
     networks:
@@ -266,185 +259,14 @@ services:
     image: grafana/grafana:latest
     container_name: qazaqair-grafana-1
     restart: always
-    environment:
-      - GF_SECURITY_ADMIN_PASSWORD=admin
-      - GF_USERS_ALLOW_SIGN_UP=false
-      - GF_RENDERING_ENABLED=false
-      - GF_IMAGE_RENDERER_PLUGIN_ENABLED=false
-      - GF_PLUGINS_ENABLE_ALPHA=false
-      - GF_FEATURE_TOGGLES_ENABLE=publicDashboards
+    user: "root"
     ports:
       - "3000:3000"
-    volumes:
-      - grafana_data:/var/lib/grafana
     networks:
       - app-network
     depends_on:
       - prometheus
-    deploy:
-      resources:
-        limits:
-          memory: 256M
-          cpus: '0.25'
-        reservations:
-          memory: 128M
-          cpus: '0.1'
-
-  renderer:
-    image: grafana/grafana-image-renderer:latest
-    container_name: grafana-renderer
-    restart: always
-    ports:
-      - "8081:8081"
-    networks:
-      - app-network
-    environment:
-      - ENABLE_METRICS=true
-      - IGNORE_HTTPS_ERRORS=true
-    deploy:
-      resources:
-        limits:
-          memory: 512M
-          cpus: '0.5'
-        reservations:
-          memory: 256M
-          cpus: '0.25'
-
-  # System Metrics - Node Exporter
-  node-exporter:
-    image: prom/node-exporter:latest
-    container_name: node-exporter
-    restart: unless-stopped
-    volumes:
-      - /proc:/host/proc:ro
-      - /sys:/host/sys:ro
-      - /:/rootfs:ro
-      - /etc/hostname:/etc/nodename:ro
-    command:
-      - '--path.procfs=/host/proc'
-      - '--path.rootfs=/rootfs'
-      - '--path.sysfs=/host/sys'
-      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
-      - '--collector.netdev.device-exclude=^(docker|veth|br-|lo)($$|:)'
-      - '--collector.netclass.ignored-devices=^(docker|veth|br-|lo)($$|:)'
-      - '--collector.systemd.unit-exclude=^(docker|containerd|kubelet)\\.service$$'
-      - '--collector.filesystem.fs-types-exclude=^(autofs|binfmt_misc|bpf|cgroup2?|configfs|debugfs|devpts|devtmpfs|fusectl|hugetlbfs|mqueue|nsfs|overlay|proc|procfs|pstore|rpc_pipefs|securityfs|selinuxfs|squashfs|sysfs|tracefs)$$'
-    ports:
-      - "9100:9100"
-    networks:
-      - app-network
-    deploy:
-      resources:
-        limits:
-          memory: 128M
-          cpus: '0.1'
-        reservations:
-          memory: 64M
-          cpus: '0.05'
-
-  # Container Metrics - cAdvisor
-  cadvisor:
-    image: gcr.io/cadvisor/cadvisor:latest
-    container_name: cadvisor
-    restart: unless-stopped
-    ports:
-      - "8080:8080"
-    networks:
-      - app-network
-    command:
-      - --port=8080
-      - --docker_only=true
-      - --disable_metrics=percpu
-    deploy:
-      resources:
-        limits:
-          memory: 256M
-          cpus: '0.25'
-        reservations:
-          memory: 128M
-          cpus: '0.1'
-
-  # PostgreSQL Metrics
-  postgres-exporter:
-    image: prometheuscommunity/postgres-exporter:latest
-    container_name: postgres-exporter
-    restart: unless-stopped
-    environment:
-      DATA_SOURCE_NAME: "postgresql://user:password@db:5432/airmonitor?sslmode=disable"
-    ports:
-      - "9187:9187"
-    networks:
-      - app-network
-    depends_on:
-      - db
-    deploy:
-      resources:
-        limits:
-          memory: 128M
-          cpus: '0.1'
-        reservations:
-          memory: 64M
-          cpus: '0.05'
-
-  # Nginx Metrics
-  nginx-exporter:
-    image: nginx/nginx-prometheus-exporter:latest
-    container_name: nginx-exporter
-    restart: unless-stopped
-    command:
-      - -nginx.scrape-uri=http://qazaqair-app-1/nginx_status
-    ports:
-      - "9113:9113"
-    networks:
-      - app-network
-    depends_on:
-      - app
-    deploy:
-      resources:
-        limits:
-          memory: 64M
-          cpus: '0.05'
-        reservations:
-          memory: 32M
-          cpus: '0.02'
-
-  # Blackbox Exporter
-  blackbox-exporter:
-    image: prom/blackbox-exporter:latest
-    container_name: blackbox-exporter
-    restart: unless-stopped
-    ports:
-      - "9115:9115"
-    networks:
-      - app-network
-    volumes:
-      - ./monitoring/blackbox:/config
-    command:
-      - '--config.file=/config/blackbox.yml'
-    deploy:
-      resources:
-        limits:
-          memory: 128M
-          cpus: '0.1'
-        reservations:
-          memory: 64M
-          cpus: '0.05'
-
-  # AlertManager
-  alertmanager:
-    image: prom/alertmanager:latest
-    container_name: alertmanager
-    restart: unless-stopped
-    volumes:
-      - ./monitoring/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml
-      - alertmanager_data:/alertmanager
-    ports:
-      - "9093:9093"
-    networks:
-      - app-network
-    command:
-      - '--config.file=/etc/alertmanager/alertmanager.yml'
-      - '--storage.path=/alertmanager'
+      - graphite
     deploy:
       resources:
         limits:
@@ -457,14 +279,11 @@ services:
 networks:
   app-network:
     driver: bridge
-    ipam:
-      config:
-        - subnet: 172.20.0.0/16
+  monitoring_network:
+    external: true
+    name: monitoring_network
 
 volumes:
   portainer_data:
   postgres_data:
   n8n_data:
-  prometheus_data:
-  grafana_data:
-  alertmanager_data:

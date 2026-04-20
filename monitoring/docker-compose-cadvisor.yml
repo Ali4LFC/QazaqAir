@@ -1,0 +1,116 @@
+version: '3.8'
+
+services:
+  # cAdvisor - Container Advisor
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:latest
+    container_name: cadvisor
+    restart: unless-stopped
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    privileged: true
+    devices:
+      - /dev/kmsg
+    ports:
+      - "8080:8080"
+    networks:
+      - monitoring_network
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.25'
+        reservations:
+          memory: 128M
+          cpus: '0.1'
+    command:
+      - --housekeeping_interval=30s
+      - --docker_only=true
+      - --storage_duration=2m
+      - --enable_metrics=app,cpu,disk,diskIO,memory,network
+      - --disable_metrics=advtcp,cpuLoad,diskMap,hugetlb,memoryNuma,process,perf_event,referenced_memory,resctrl,sched,tcp,udp,process
+
+  # Node Exporter - System Metrics
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: node-exporter
+    restart: unless-stopped
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+      - /etc/hostname:/etc/nodename:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.rootfs=/rootfs'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+      - '--collector.netdev.device-exclude=^(docker|veth|br-|lo)($$|:)'
+      - '--collector.netclass.ignored-devices=^(docker|veth|br-|lo)($$|:)'
+      - '--collector.systemd.unit-exclude=^(docker|containerd|kubelet)\\.service$$'
+      - '--collector.filesystem.fs-types-exclude=^(autofs|binfmt_misc|bpf|cgroup2?|configfs|debugfs|devpts|devtmpfs|fusectl|hugetlbfs|mqueue|nsfs|overlay|proc|procfs|pstore|rpc_pipefs|securityfs|selinuxfs|squashfs|sysfs|tracefs)$$'
+    ports:
+      - "9100:9100"
+    networks:
+      - monitoring_network
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: '0.1'
+        reservations:
+          memory: 64M
+          cpus: '0.05'
+
+  # PostgreSQL Exporter
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:latest
+    container_name: postgres-exporter
+    restart: unless-stopped
+    environment:
+      DATA_SOURCE_NAME: "postgresql://user:password@qazaqair-db-1:5432/airmonitor?sslmode=disable"
+    ports:
+      - "9187:9187"
+    networks:
+      - monitoring_network
+    depends_on:
+      - qazaqair-db-1
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: '0.1'
+        reservations:
+          memory: 64M
+          cpus: '0.05'
+
+  # Nginx Exporter
+  nginx-exporter:
+    image: nginx/nginx-prometheus-exporter:latest
+    container_name: nginx-exporter
+    restart: unless-stopped
+    command:
+      - -nginx.scrape-uri=http://qazaqair-app-1/nginx_status
+    ports:
+      - "9113:9113"
+    networks:
+      - monitoring_network
+    depends_on:
+      - qazaqair-app-1
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+          cpus: '0.05'
+        reservations:
+          memory: 32M
+          cpus: '0.02'
+
+networks:
+  monitoring_network:
+    external: true
+    name: monitoring_network

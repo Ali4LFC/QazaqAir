@@ -1,0 +1,119 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: 'qazaqair'
+    environment: 'production'
+
+rule_files:
+  - "alert_rules.yml"
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          - alertmanager:9093
+
+scrape_configs:
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+    scrape_interval: 30s
+
+  # Node Exporter - System Metrics
+  - job_name: 'node-exporter'
+    static_configs:
+      - targets: ['node-exporter:9100']
+    scrape_interval: 30s
+
+  # Docker Container Metrics
+  - job_name: 'cadvisor'
+    static_configs:
+      - targets: ['cadvisor:8080']
+    scrape_interval: 30s
+    metrics_path: /metrics
+
+  # Application Backend
+  - job_name: 'qazaqair-backend'
+    static_configs:
+      - targets: ['qazaqair-backend-1:8000']
+    metrics_path: /metrics
+    scrape_interval: 30s
+
+  # Nginx Metrics
+  - job_name: 'nginx'
+    static_configs:
+      - targets: ['nginx-exporter:9113']
+    scrape_interval: 30s
+
+  # PostgreSQL Metrics
+  - job_name: 'postgres-exporter'
+    static_configs:
+      - targets: ['postgres-exporter:9187']
+    scrape_interval: 30s
+
+  # Grafana
+  - job_name: 'grafana'
+    static_configs:
+      - targets: ['grafana:3000']
+    metrics_path: /metrics
+    scrape_interval: 30s
+
+  # Blackbox Exporter - HTTP Checks
+  - job_name: 'blackbox-http'
+    metrics_path: /probe
+    params:
+      module: [http_2xx]
+    static_configs:
+      - targets:
+        - http://qazaqair-app-1/
+        - http://qazaqair-app-1/api/
+        - http://qazaqair-frontend-1/
+        - http://qazaqair-backend-1:8000/health
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115
+
+  # Blackbox Exporter - TCP Checks
+  - job_name: 'blackbox-tcp'
+    metrics_path: /probe
+    params:
+      module: [tcp_connect]
+    static_configs:
+      - targets:
+        - qazaqair-db-1:5432
+        - qazaqair-backend-1:8000
+        - grafana:3000
+        - prometheus:9090
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115
+
+  # Zabbix Metrics (if available)
+  - job_name: 'zabbix'
+    static_configs:
+      - targets: ['zabbix-server:10051']
+    scrape_interval: 60s
+
+  # Custom Application Metrics
+  - job_name: 'qazaqair-app'
+    static_configs:
+      - targets: ['app:80']
+    metrics_path: /metrics
+    scrape_interval: 30s
+
+  # Docker Registry (if used)
+  - job_name: 'docker-registry'
+    static_configs:
+      - targets: ['registry:5000']
+    metrics_path: /metrics
+    scrape_interval: 30s
