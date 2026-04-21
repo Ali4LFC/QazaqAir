@@ -142,6 +142,10 @@ async def read_index():
         return FileResponse(index_path)
     return HTMLResponse("<h1>Backend is running!</h1><p>Frontend not found.</p>")
 
+@app.get("/health")
+async def health_check():
+    return {"status": "healthy", "service": "qazaqair-backend"}
+
 if __name__ == "__main__":
     # Check if SSL files actually exist
     ssl_certfile = settings.SSL_CERTFILE if settings.SSL_CERTFILE and os.path.exists(settings.SSL_CERTFILE) else None

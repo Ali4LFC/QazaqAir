@@ -67,13 +67,47 @@ scrape_configs:
       module: [http_2xx]
     static_configs:
       - targets:
-        - http://qazaqair-app-1/
-        - http://qazaqair-app-1/api/
-        - http://qazaqair-frontend-1/
-        - http://qazaqair-backend-1:8000/health
+        - qazaqair-app-1
+        - qazaqair-frontend-1
     relabel_configs:
       - source_labels: [__address__]
         target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115
+
+  # Blackbox Exporter - API Checks
+  - job_name: 'blackbox-api'
+    metrics_path: /probe
+    params:
+      module: [http_2xx]
+    static_configs:
+      - targets:
+        - qazaqair-app-1
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - target_label: __param_target
+        replacement: http://qazaqair-app-1/api/air-quality
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115
+
+  # Blackbox Exporter - HTTPS Checks
+  - job_name: 'blackbox-https'
+    metrics_path: /probe
+    params:
+      module: [https_2xx]
+    static_configs:
+      - targets:
+        - qazaqair-backend-1
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - target_label: __param_target
+        replacement: https://qazaqair-backend-1:8000/health
       - source_labels: [__param_target]
         target_label: instance
       - target_label: __address__
