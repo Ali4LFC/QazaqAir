@@ -463,7 +463,7 @@ services:
     container_name: qazaqair-nagios-1
     restart: unless-stopped
     ports:
-      - "8081:80"
+      - "8083:80"
     volumes:
       - nagios_etc:/opt/nagios/etc
       - nagios_var:/opt/nagios/var
