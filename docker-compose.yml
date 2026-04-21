@@ -70,6 +70,28 @@ services:
           memory: 128M
           cpus: '0.1'
 
+  jenkins:
+    image: jenkins/jenkins:lts-jdk17
+    container_name: qazaqair-jenkins-1
+    restart: always
+    user: root
+    ports:
+      - "8085:8080"
+      - "50000:50000"
+    volumes:
+      - jenkins_data:/var/jenkins_home
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - app-network
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '0.75'
+        reservations:
+          memory: 512M
+          cpus: '0.3'
+
   graphite:
     image: graphiteapp/graphite-statsd:latest
     container_name: qazaqair-graphite-1
@@ -94,7 +116,6 @@ services:
     container_name: qazaqair-n8n-1
     restart: always
     environment:
-      # - N8N_PATH=/n8n/
       - DB_TYPE=postgresdb
       - DB_POSTGRESDB_HOST=db
       - DB_POSTGRESDB_PORT=5432
@@ -313,7 +334,6 @@ services:
           memory: 256M
           cpus: '0.25'
 
-  # System Metrics - Node Exporter
   node-exporter:
     image: prom/node-exporter:latest
     container_name: node-exporter
@@ -345,7 +365,6 @@ services:
           memory: 64M
           cpus: '0.05'
 
-  # Container Metrics - cAdvisor
   cadvisor:
     image: gcr.io/cadvisor/cadvisor:latest
     container_name: cadvisor
@@ -367,7 +386,6 @@ services:
           memory: 128M
           cpus: '0.1'
 
-  # PostgreSQL Metrics
   postgres-exporter:
     image: prometheuscommunity/postgres-exporter:latest
     container_name: postgres-exporter
@@ -389,7 +407,6 @@ services:
           memory: 64M
           cpus: '0.05'
 
-  # Nginx Metrics
   nginx-exporter:
     image: nginx/nginx-prometheus-exporter:latest
     container_name: nginx-exporter
@@ -411,7 +428,6 @@ services:
           memory: 32M
           cpus: '0.02'
 
-  # Blackbox Exporter
   blackbox-exporter:
     image: prom/blackbox-exporter:latest
     container_name: blackbox-exporter
@@ -433,7 +449,6 @@ services:
           memory: 64M
           cpus: '0.05'
 
-  # AlertManager
   alertmanager:
     image: prom/alertmanager:latest
     container_name: alertmanager
@@ -457,7 +472,6 @@ services:
           memory: 128M
           cpus: '0.1'
 
-  # Nagios Core - система мониторинга
   nagios:
     image: jasonrivers/nagios:latest
     container_name: qazaqair-nagios-1
@@ -494,7 +508,6 @@ services:
       retries: 3
       start_period: 60s
 
-  # NRPE Agent для Nagios
   nagios-nrpe:
     image: andreaskasper/nagios-nrpe:latest
     container_name: qazaqair-nagios-nrpe-1
@@ -539,3 +552,4 @@ volumes:
   nagios_custom_plugins:
   nagiosgraph_var:
   nagiosgraph_etc:
+  jenkins_data:
