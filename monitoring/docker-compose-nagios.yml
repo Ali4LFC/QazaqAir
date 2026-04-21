@@ -1,0 +1,99 @@
+version: '3.8'
+
+services:
+  # Nagios Core - система мониторинга
+  nagios:
+    image: jasonrivers/nagios:latest
+    container_name: nagios
+    restart: unless-stopped
+    ports:
+      - "8081:80"
+    volumes:
+      - nagios_etc:/opt/nagios/etc
+      - nagios_var:/opt/nagios/var
+      - nagios_plugins:/opt/nagios/libexec
+      - nagios_custom_plugins:/opt/Custom-Nagios-Plugins
+      - nagiosgraph_var:/opt/nagiosgraph/var
+      - nagiosgraph_etc:/opt/nagiosgraph/etc
+      - ./nagios/nagios.cfg:/opt/nagios/etc/nagios.cfg:ro
+      - ./nagios/conf.d:/opt/nagios/etc/conf.d:ro
+    environment:
+      - NAGIOSADMIN_USER=nagiosadmin
+      - NAGIOSADMIN_PASS=nagiosadmin
+      - NAGIOS_TIMEZONE=Asia/Almaty
+    networks:
+      - monitoring_network
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+        reservations:
+          memory: 256M
+          cpus: '0.25'
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # NRPE Agent для мониторинга хостов
+  nagios-nrpe:
+    image: hub.docker.com/r/gasi/nrpe
+    container_name: nagios-nrpe
+    restart: unless-stopped
+    ports:
+      - "5666:5666"
+    volumes:
+      - /:/hostfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - ./nagios/nrpe.cfg:/etc/nagios/nrpe.cfg:ro
+    environment:
+      - NRPE_ALLOWED_HOSTS=nagios,127.0.0.1,172.18.0.0/16
+    networks:
+      - monitoring_network
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: '0.1'
+        reservations:
+          memory: 64M
+          cpus: '0.05'
+
+  # NSCA для пассивных проверок
+  nagios-nsca:
+    image: jasonrivers/nagios:latest
+    container_name: nagios-nsca
+    restart: unless-stopped
+    command: /usr/sbin/nsca -c /etc/nsca.cfg -f
+    ports:
+      - "5667:5667"
+    volumes:
+      - nagios_var:/opt/nagios/var
+      - ./nagios/nsca.cfg:/etc/nsca.cfg:ro
+    networks:
+      - monitoring_network
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: '0.1'
+        reservations:
+          memory: 64M
+          cpus: '0.05'
+
+volumes:
+  nagios_etc:
+  nagios_var:
+  nagios_plugins:
+  nagios_custom_plugins:
+  nagiosgraph_var:
+  nagiosgraph_etc:
+
+networks:
+  monitoring_network:
+    external: true
+    name: monitoring_network
