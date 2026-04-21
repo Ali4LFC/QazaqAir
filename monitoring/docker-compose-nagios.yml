@@ -40,7 +40,7 @@ services:
 
   # NRPE Agent для мониторинга хостов
   nagios-nrpe:
-    image: hub.docker.com/r/gasi/nrpe
+    image: andreaskasper/nagios-nrpe:latest
     container_name: nagios-nrpe
     restart: unless-stopped
     ports:
@@ -51,7 +51,7 @@ services:
       - /sys:/sys:ro
       - ./nagios/nrpe.cfg:/etc/nagios/nrpe.cfg:ro
     environment:
-      - NRPE_ALLOWED_HOSTS=nagios,127.0.0.1,172.18.0.0/16
+      - ALLOWED_HOSTS=nagios,127.0.0.1,172.18.0.0/16
     networks:
       - monitoring_network
     deploy:

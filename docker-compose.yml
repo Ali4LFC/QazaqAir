@@ -496,7 +496,7 @@ services:
 
   # NRPE Agent для Nagios
   nagios-nrpe:
-    image: hub.docker.com/r/gasi/nrpe
+    image: andreaskasper/nagios-nrpe:latest
     container_name: qazaqair-nagios-nrpe-1
     restart: unless-stopped
     ports:
@@ -507,7 +507,7 @@ services:
       - /sys:/sys:ro
       - ./monitoring/nagios/nrpe.cfg:/etc/nagios/nrpe.cfg:ro
     environment:
-      - NRPE_ALLOWED_HOSTS=nagios,127.0.0.1,172.20.0.0/16
+      - ALLOWED_HOSTS=nagios,127.0.0.1,172.20.0.0/16
     networks:
       - app-network
     deploy:
