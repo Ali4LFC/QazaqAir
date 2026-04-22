@@ -34,13 +34,6 @@ scrape_configs:
     scrape_interval: 30s
     metrics_path: /metrics
 
-  # Application Backend
-  - job_name: 'qazaqair-backend'
-    static_configs:
-      - targets: ['qazaqair-backend-1:8000']
-    metrics_path: /metrics
-    scrape_interval: 30s
-
   # Nginx Metrics
   - job_name: 'nginx'
     static_configs:
@@ -123,7 +116,7 @@ scrape_configs:
         - qazaqair-db-1:5432
         - qazaqair-backend-1:8000
         - grafana:3000
-        - prometheus:9090
+        - qazaqair-prometheus-1:9090
     relabel_configs:
       - source_labels: [__address__]
         target_label: __param_target
@@ -132,22 +125,3 @@ scrape_configs:
       - target_label: __address__
         replacement: blackbox-exporter:9115
 
-  # Zabbix Metrics (if available)
-  - job_name: 'zabbix'
-    static_configs:
-      - targets: ['zabbix-server:10051']
-    scrape_interval: 60s
-
-  # Custom Application Metrics
-  - job_name: 'qazaqair-app'
-    static_configs:
-      - targets: ['app:80']
-    metrics_path: /metrics
-    scrape_interval: 30s
-
-  # Docker Registry (if used)
-  - job_name: 'docker-registry'
-    static_configs:
-      - targets: ['registry:5000']
-    metrics_path: /metrics
-    scrape_interval: 30s

@@ -395,7 +395,7 @@ services:
     container_name: nginx-exporter
     restart: unless-stopped
     command:
-      - -nginx.scrape-uri=http://qazaqair-app-1/nginx_status
+      - --nginx.scrape-uri=http://qazaqair-app-1/nginx_status
     ports:
       - "9113:9113"
     networks:
