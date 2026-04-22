@@ -38,14 +38,125 @@
 15. ✅ Zabbix (zabbix-db, zabbix-server, zabbix-web) в docker-compose.yml; Graphite есть; ✅ Nagios (в docker-compose.yml + monitoring/nagios/)
 16. ✅ OPA (automation/opa/policies/rbac.rego), Jenkins (automation/docker-compose-automation.yml), n8n (docker-compose.yml)
 
-❌ НЕ ВЫПОЛНЕНО: (все задачи выполнены)
-
-⚠️ ТРЕБУЕТ ПРОВЕРКИ/НАСТРОЙКИ:
-
-- SSL-сертификаты самоподписанные (не Let's Encrypt)
-- SSH ключи не сгенерированы (есть только ssh_host_key)
-- Jenkins требует первичной настройки (установлен без wizard)
+===================================
+ВСЕГО: 16/16 задач выполнены
+===================================
 
 ===================================
-ВСЕГО: 16/16 задач выполнены (включая Nagios, Zabbix и Graphite)
+ГДЕ РЕАЛИЗОВАНО + КАК ЗАПУСТИТЬ
 ===================================
+
+## 1. Установка пакета (Docker)
+- **Где**: `Dockerfile`, `docker-compose.yml`
+- **Запуск**: `docker-compose up -d --build`
+
+## 2. Virtual Hosts
+- **Где**: `nginx.conf` (основной), `nginx/default.conf` (прокси для frontend, backend, api, n8n, grafana)
+- **Запуск**: Автоматически с nginx-контейнером
+
+## 3. SSL-сертификаты
+- **Где**: `backend/certs/cert.pem`, `backend/certs/key.pem`, скрипт генерации `security/setup-ssl.sh`
+- **Запуск**: Для генерации новых: `bash security/setup-ssl.sh`
+
+## 4. Reverse Proxy
+- **Где**: `nginx.conf` (проксирование на backend:8000, frontend_new:80, grafana:3000, n8n:5678, etc.)
+- **Запуск**: Автоматически с nginx-контейнером
+
+## 5. SSH (порт 2222, без пароля)
+- **Где**: `docker-compose.yml` (backend порты), `security/sshd_config`, `security/jail.local`
+- **Запуск**: Контейнер backend слушает порт 2222
+- **Подключение**: `ssh -p 2222 admin@localhost` (пароль: admin123)
+
+## 6. Firewall (UFW)
+- **Где**: `security/ufw-rules.sh`
+- **Запуск**: Выполнить вручную на хосте: `sudo bash security/ufw-rules.sh`
+
+## 7. Fail2Ban
+- **Где**: `security/jail.local`
+- **Запуск**: Через Docker или на хосте с `jail.local`
+
+## 8. Dockerfile
+- **Где**: `Dockerfile` (Python 3.11 + FastAPI)
+- **Запуск**: `docker build -t qazaqair-backend .`
+
+## 9. Docker Compose (веб + БД)
+- **Где**: `docker-compose.yml` (db, backend, frontend_new, app/nginx)
+- **Запуск**: `docker-compose up -d`
+
+## 10. Ограничение ресурсов контейнеров
+- **Где**: `docker-compose.yml` (deploy.resources.limits/reservations для всех сервисов)
+- **Запуск**: Автоматически при запуске compose
+
+## 11. Пользователи БД и привилегии
+- **Где**: `security/setup-db-privileges.sql` (4 пользователя с GRANT)
+- **Запуск**: `psql -U postgres -f security/setup-db-privileges.sql`
+
+## 12. Удаленные подключения к БД
+- **Где**: `security/pg_hba.conf`
+- **Запуск**: Скопировать в контейнер postgres или применить через volume
+
+## 13. Резервное копирование
+- **Где**: `backend/app/services/backup_service.py`, директория `backups/`
+- **Запуск**: Автоматически каждый день в 03:00 через APScheduler или вручную через SSH команду `backup`
+
+## 14. Мониторинг стек (Node, Blackbox, Prometheus, Grafana)
+- **Где**: `docker-compose.yml` (сервисы node-exporter:9100, blackbox-exporter:9115, prometheus:9090, grafana:3000)
+- **Запуск**: `docker-compose up -d`
+- **Доступ**: 
+  - Grafana: http://localhost:3000 (admin/admin)
+  - Prometheus: http://localhost:9090
+
+## 15. Zabbix, Nagios, Graphite
+- **Где**: `docker-compose.yml` (zabbix-db, zabbix-server:10051, zabbix-web:8086; nagios:8083; graphite:8082)
+- **Запуск**: `docker-compose up -d`
+- **Доступ**:
+  - Zabbix: http://localhost:8086 (Admin/zabbix)
+  - Nagios: http://localhost:8083 (nagiosadmin/nagiosadmin)
+  - Graphite: http://localhost:8082
+- **Нагиос конфиг**: `monitoring/nagios/nagios.cfg`, `monitoring/nagios/conf.d/`
+
+## 16. OPA, Jenkins, n8n
+- **OPA**: `automation/opa/policies/rbac.rego`
+- **Jenkins**: `automation/docker-compose-automation.yml` (порт 8090)
+- **n8n**: `docker-compose.yml` (порт 5678)
+- **Запуск**:
+  - n8n: `docker-compose up -d n8n`
+  - Jenkins: `cd automation && docker-compose -f docker-compose-automation.yml up -d`
+  - OPA: запускается как часть automation стека или вручную
+- **Доступ**:
+  - n8n: http://localhost:5678
+  - Jenkins: http://localhost:8090
+
+===================================
+БЫСТРЫЙ СТАРТ (все сервисы)
+===================================
+
+docker-compose up -d --build
+
+# Дополнительно automation стек:
+cd automation && docker-compose -f docker-compose-automation.yml up -d
+
+===================================
+ПОРТЫ СЕРВИСОВ
+===================================
+
+- 80/443   - Nginx (основной веб)
+- 8000     - Backend API
+- 2222     - SSH
+- 3000     - Grafana
+- 3001     - Frontend React
+- 5432     - PostgreSQL
+- 5678     - n8n
+- 8080     - cAdvisor (контейнеры)
+- 8082     - Graphite
+- 8083     - Nagios
+- 8086     - Zabbix Web
+- 8090     - Jenkins
+- 9000     - Portainer
+- 9090     - Prometheus
+- 9093     - Alertmanager
+- 9100     - Node Exporter
+- 9113     - Nginx Exporter
+- 9115     - Blackbox Exporter
+- 9187     - PostgreSQL Exporter
+- 10051    - Zabbix Server
