@@ -29,7 +29,7 @@ services:
     container_name: qazaqair-backend-1
     restart: always
     environment:
-      - DATABASE_URL=postgresql://user:password@db:5432/airmonitor
+      - POSTGRES_URL=postgresql+psycopg2://postgres.gtbowxugcefxtckejavv:QazaqAir963%40@aws-1-ap-northeast-1.pooler.supabase.com:5432/postgres
       - SSL_CERTFILE=/app/backend/certs/cert.pem
       - SSL_KEYFILE=/app/backend/certs/key.pem
     ports:
@@ -40,8 +40,6 @@ services:
       - ./backend/certs:/app/backend/certs
     networks:
       - app-network
-    depends_on:
-      - db
     deploy:
       resources:
         limits:
@@ -274,7 +272,6 @@ services:
     networks:
       - app-network
     depends_on:
-      - db
       - backend
       - frontend_new
     deploy:
