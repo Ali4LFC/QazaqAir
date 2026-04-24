@@ -100,13 +100,25 @@ const PulseIndicator = () => (
   />
 );
 
-// Glass card style
-const glassCardSx = {
-  background: 'rgba(22, 27, 34, 0.7)',
+// Glass card style - адаптивный к теме
+const getGlassCardSx = (isDark: boolean) => ({
+  background: isDark ? 'rgba(22, 27, 34, 0.7)' : 'rgba(255, 255, 255, 0.9)',
   backdropFilter: 'blur(12px)',
-  border: '1px solid rgba(255, 255, 255, 0.1)',
+  border: isDark ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid rgba(0, 0, 0, 0.08)',
   borderRadius: '16px',
-};
+});
+
+// Адаптивные цвета для мелких карточек (темп/влаж/ветер)
+const getMetricCardBg = (isDark: boolean) => isDark ? 'rgba(31, 35, 41, 0.8)' : '#ffffff';
+
+// Адаптивный футер
+const getFooterBg = (isDark: boolean) => isDark ? '#0d1117' : '#f6f8fa';
+
+// Адаптивный сайдбар
+const getSidebarBg = (isDark: boolean) => isDark ? '#0d1117' : '#ffffff';
+
+// Адаптивный оверлей
+const getOverlayBg = (isDark: boolean) => isDark ? 'rgba(0,0,0,0.5)' : 'rgba(0,0,0,0.3)';
 
 export function Home() {
   const { user, isAuthenticated } = useAuth();
@@ -297,7 +309,7 @@ export function Home() {
         <Grid container spacing={3}>
           {/* Data Panel */}
           <Grid size={{ xs: 12, lg: 4 }}>
-            <Card sx={{ ...glassCardSx, height: '100%' }}>
+            <Card sx={{ ...getGlassCardSx(muiTheme.palette.mode === 'dark'), height: '100%' }}>
               <CardContent sx={{ p: 3, '&:last-child': { pb: 3 } }}>
                 <Typography variant="h6" color="text.secondary">{displayName}</Typography>
                 <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1, mt: 1 }}>
@@ -332,7 +344,7 @@ export function Home() {
 
                 <Grid container spacing={1} sx={{ mb: 2 }}>
                   <Grid size={{ xs: 4 }}>
-                    <Card sx={{ bgcolor: 'rgba(31, 35, 41, 0.8)', textAlign: 'center', p: 1 }}>
+                    <Card sx={{ bgcolor: getMetricCardBg(muiTheme.palette.mode === 'dark'), textAlign: 'center', p: 1 }}>
                       <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>{t.temp}</Typography>
                       <Typography variant="h6" sx={{ fontWeight: 600 }}>
                         {airQuality?.current.weather.tp || '--'}°C
@@ -340,7 +352,7 @@ export function Home() {
                     </Card>
                   </Grid>
                   <Grid size={{ xs: 4 }}>
-                    <Card sx={{ bgcolor: 'rgba(31, 35, 41, 0.8)', textAlign: 'center', p: 1 }}>
+                    <Card sx={{ bgcolor: getMetricCardBg(muiTheme.palette.mode === 'dark'), textAlign: 'center', p: 1 }}>
                       <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>{t.hum}</Typography>
                       <Typography variant="h6" sx={{ fontWeight: 600 }}>
                         {airQuality?.current.weather.hu || '--'}%
@@ -348,7 +360,7 @@ export function Home() {
                     </Card>
                   </Grid>
                   <Grid size={{ xs: 4 }}>
-                    <Card sx={{ bgcolor: 'rgba(31, 35, 41, 0.8)', textAlign: 'center', p: 1 }}>
+                    <Card sx={{ bgcolor: getMetricCardBg(muiTheme.palette.mode === 'dark'), textAlign: 'center', p: 1 }}>
                       <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>{t.wind}</Typography>
                       <Typography variant="h6" sx={{ fontWeight: 600 }}>
                         {airQuality?.current.weather.ws || '--'} {t.ms}
@@ -371,7 +383,7 @@ export function Home() {
                 </Button>
 
                 {compareMode && (
-                  <Box sx={{ mt: 2, p: 2, bgcolor: 'rgba(31, 35, 41, 0.8)', borderRadius: '12px' }}>
+                  <Box sx={{ mt: 2, p: 2, bgcolor: getMetricCardBg(muiTheme.palette.mode === 'dark'), borderRadius: '12px' }}>
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
                       <Typography variant="body2" color="text.secondary">
                         {lang === 'ru' ? 'Выберите регион для сравнения:' : 'Салыстыру үшін аймақты таңдаңыз:'}
@@ -396,16 +408,6 @@ export function Home() {
                           setCompareMode(false);
                         }
                       }}
-                      sx={{
-                        '& .MuiInputBase-root': {
-                          bgcolor: 'rgba(22, 27, 34, 0.8)',
-                          borderRadius: '12px',
-                          color: '#f0f6fc',
-                        },
-                        '& .MuiOutlinedInput-notchedOutline': {
-                          borderColor: 'rgba(255, 255, 255, 0.2)',
-                        },
-                      }}
                     >
                       {REGIONS.filter(r => r.key !== selectedRegion).map((region) => {
                         const summaryItem = summary?.dirty.find(d => d.key === region.key) || 
@@ -425,7 +427,7 @@ export function Home() {
 
                 {/* Compare Section */}
                 {compareAirQuality && compareRegionData && !compareMode && (
-                  <Box sx={{ mt: 2, p: 2, bgcolor: 'rgba(31, 35, 41, 0.8)', borderRadius: '12px' }}>
+                  <Box sx={{ mt: 2, p: 2, bgcolor: getMetricCardBg(muiTheme.palette.mode === 'dark'), borderRadius: '12px' }}>
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
                       <Typography variant="body2" color="text.secondary">
                         {lang === 'ru' ? 'Сравнение с:' : 'Салыстыру:'}
@@ -470,7 +472,7 @@ export function Home() {
                     
                     <Grid container spacing={1}>
                       <Grid size={{ xs: 4 }}>
-                        <Box sx={{ textAlign: 'center', p: 1, bgcolor: 'rgba(22, 27, 34, 0.8)', borderRadius: '6px' }}>
+                        <Box sx={{ textAlign: 'center', p: 1, bgcolor: getMetricCardBg(muiTheme.palette.mode === 'dark'), borderRadius: '6px' }}>
                           <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>{t.temp}</Typography>
                           <Typography variant="body2" sx={{ fontWeight: 600 }}>
                             {compareAirQuality.current.weather.tp || '--'}°C
@@ -478,7 +480,7 @@ export function Home() {
                         </Box>
                       </Grid>
                       <Grid size={{ xs: 4 }}>
-                        <Box sx={{ textAlign: 'center', p: 1, bgcolor: 'rgba(22, 27, 34, 0.8)', borderRadius: '6px' }}>
+                        <Box sx={{ textAlign: 'center', p: 1, bgcolor: getMetricCardBg(muiTheme.palette.mode === 'dark'), borderRadius: '6px' }}>
                           <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>{t.hum}</Typography>
                           <Typography variant="body2" sx={{ fontWeight: 600 }}>
                             {compareAirQuality.current.weather.hu || '--'}%
@@ -486,7 +488,7 @@ export function Home() {
                         </Box>
                       </Grid>
                       <Grid size={{ xs: 4 }}>
-                        <Box sx={{ textAlign: 'center', p: 1, bgcolor: 'rgba(22, 27, 34, 0.8)', borderRadius: '6px' }}>
+                        <Box sx={{ textAlign: 'center', p: 1, bgcolor: getMetricCardBg(muiTheme.palette.mode === 'dark'), borderRadius: '6px' }}>
                           <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>{t.wind}</Typography>
                           <Typography variant="body2" sx={{ fontWeight: 600 }}>
                             {compareAirQuality.current.weather.ws || '--'} {t.ms}
@@ -502,7 +504,7 @@ export function Home() {
 
           {/* Map Panel */}
           <Grid size={{ xs: 12, lg: 8 }}>
-            <Card sx={{ ...glassCardSx, height: '400px', overflow: 'hidden' }}>
+            <Card sx={{ ...getGlassCardSx(muiTheme.palette.mode === 'dark'), height: '400px', overflow: 'hidden' }}>
               <MapContainer
                 key={selectedRegion}
                 center={currentRegion.coords}
@@ -569,7 +571,7 @@ export function Home() {
         {/* Summary Tables */}
         <Grid container spacing={3} sx={{ mt: 3 }}>
           <Grid size={{ xs: 12, md: 6 }}>
-            <Card sx={glassCardSx}>
+            <Card sx={getGlassCardSx(muiTheme.palette.mode === 'dark')}>
               <CardContent sx={{ p: 3, '&:last-child': { pb: 3 } }}>
                 <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>
                   {t.dirtyTitle}
@@ -586,7 +588,7 @@ export function Home() {
                           justifyContent: 'space-between',
                           alignItems: 'center',
                           p: 1,
-                          bgcolor: 'rgba(31, 35, 41, 0.8)',
+                          bgcolor: getMetricCardBg(muiTheme.palette.mode === 'dark'),
                           borderRadius: '8px',
                         }}
                       >
@@ -610,7 +612,7 @@ export function Home() {
           </Grid>
 
           <Grid size={{ xs: 12, md: 6 }}>
-            <Card sx={glassCardSx}>
+            <Card sx={getGlassCardSx(muiTheme.palette.mode === 'dark')}>
               <CardContent sx={{ p: 3, '&:last-child': { pb: 3 } }}>
                 <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>
                   {t.cleanTitle}
@@ -627,7 +629,7 @@ export function Home() {
                           justifyContent: 'space-between',
                           alignItems: 'center',
                           p: 1,
-                          bgcolor: 'rgba(31, 35, 41, 0.8)',
+                          bgcolor: getMetricCardBg(muiTheme.palette.mode === 'dark'),
                           borderRadius: '8px',
                         }}
                       >
@@ -652,7 +654,7 @@ export function Home() {
         </Grid>
 
         {/* AQI Legend */}
-        <Card sx={{ ...glassCardSx, mt: 3 }}>
+        <Card sx={{ ...getGlassCardSx(muiTheme.palette.mode === 'dark'), mt: 3 }}>
           <CardContent sx={{ p: 3, '&:last-child': { pb: 3 } }}>
             <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>
               {t.aqiLevels}
@@ -696,10 +698,10 @@ export function Home() {
       <Box
         component="footer"
         sx={{
-          borderTop: '1px solid rgba(255,255,255,0.1)',
+          borderTop: (theme) => `1px solid ${theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)'}`,
           py: 2,
           textAlign: 'center',
-          bgcolor: '#0d1117',
+          bgcolor: (theme) => theme.palette.mode === 'dark' ? '#0d1117' : '#f6f8fa',
         }}
       >
         <Typography variant="body2" color="text.secondary">
@@ -713,7 +715,7 @@ export function Home() {
           sx={{
             position: 'fixed',
             inset: 0,
-            bgcolor: 'rgba(0,0,0,0.5)',
+            bgcolor: getOverlayBg(muiTheme.palette.mode === 'dark'),
             zIndex: 40,
           }}
           onClick={() => setSidebarOpen(false)}
@@ -726,18 +728,18 @@ export function Home() {
           left: 0,
           height: '100%',
           width: 320,
-          bgcolor: '#0d1117',
-          borderRight: '1px solid rgba(255,255,255,0.1)',
+          bgcolor: getSidebarBg(muiTheme.palette.mode === 'dark'),
+          borderRight: (theme) => `1px solid ${theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)'}`,
           zIndex: 50,
           transform: sidebarOpen ? 'translateX(0)' : 'translateX(-100%)',
           transition: 'transform 0.2s ease',
           overflowY: 'auto',
         }}
       >
-        <Box sx={{ p: 2, borderBottom: '1px solid rgba(255,255,255,0.1)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Box sx={{ p: 2, borderBottom: (theme) => `1px solid ${theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)'}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <Typography variant="h6" sx={{ fontWeight: 600 }}>{t.regionsTitle}</Typography>
           <IconButton onClick={() => setSidebarOpen(false)} size="small">
-            <CloseIcon sx={{ color: '#f0f6fc' }} />
+            <CloseIcon />
           </IconButton>
         </Box>
         <Box sx={{ p: 2 }}>
@@ -747,12 +749,6 @@ export function Home() {
             placeholder={t.searchPlaceholder}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            sx={{
-              '& .MuiInputBase-root': {
-                bgcolor: 'rgba(31, 35, 41, 0.8)',
-                borderRadius: '12px',
-              }
-            }}
           />
         </Box>
         <List sx={{ py: 1 }}>
@@ -804,8 +800,8 @@ export function Home() {
         slotProps={{
           paper: {
             sx: {
-              ...glassCardSx,
-              background: 'rgba(22, 27, 34, 0.95)',
+              ...getGlassCardSx(muiTheme.palette.mode === 'dark'),
+              background: muiTheme.palette.mode === 'dark' ? 'rgba(22, 27, 34, 0.95)' : 'rgba(255, 255, 255, 0.95)',
             }
           }
         }}
@@ -813,7 +809,7 @@ export function Home() {
         <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <Typography variant="h6" sx={{ fontWeight: 600 }}>{t.aqiLevels}</Typography>
           <IconButton onClick={() => setShowAQIModal(false)} size="small">
-            <CloseIcon sx={{ color: '#f0f6fc' }} />
+            <CloseIcon />
           </IconButton>
         </DialogTitle>
         <DialogContent>
@@ -826,7 +822,7 @@ export function Home() {
               { range: '201-300', label: t.veryUnhealthy, color: '#8f3f97', desc: lang === 'ru' ? 'Очень нездорово' : 'Өте зиянды' },
               { range: '300+', label: t.hazardous, color: '#7e0023', desc: lang === 'ru' ? 'Опасно' : 'Қауіпті' },
             ].map((item) => (
-              <Box key={item.range} sx={{ display: 'flex', gap: 2, alignItems: 'flex-start', p: 2, bgcolor: 'rgba(31, 35, 41, 0.8)', borderRadius: '12px' }}>
+              <Box key={item.range} sx={{ display: 'flex', gap: 2, alignItems: 'flex-start', p: 2, bgcolor: getMetricCardBg(muiTheme.palette.mode === 'dark'), borderRadius: '12px' }}>
                 <Chip
                   label={item.range}
                   sx={{
