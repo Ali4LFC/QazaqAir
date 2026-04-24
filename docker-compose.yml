@@ -211,6 +211,55 @@ services:
           memory: 128M
           cpus: '0.1'
 
+  zabbix-agent:
+    image: zabbix/zabbix-agent2:alpine-6.4-latest
+    container_name: zabbix-agent
+    restart: always
+    user: root
+    environment:
+      ZBX_HOSTNAME: "zabbix-server"
+      ZBX_SERVER_HOST: "zabbix-server"
+      ZBX_SERVER_PORT: "10051"
+      ZBX_ACTIVE_ALLOW: "true"
+      ZBX_PASSIVE_ALLOW: "true"
+      ZBX_ALLOW_ROOT: "1"
+    ports:
+      - "10050:10050"
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/hostfs:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - app-network
+    depends_on:
+      - zabbix-server
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: '0.1'
+        reservations:
+          memory: 64M
+          cpus: '0.05'
+
+  zabbix-setup:
+    build:
+      context: ./monitoring/zabbix
+      dockerfile: Dockerfile
+    container_name: zabbix-setup
+    restart: "no"
+    networks:
+      - app-network
+    depends_on:
+      - zabbix-web
+      - zabbix-server
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+          cpus: '0.05'
+
   app:
     image: nginx:alpine
     container_name: qazaqair-app-1
