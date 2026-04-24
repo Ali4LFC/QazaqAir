@@ -1,0 +1,66 @@
+# Terraform Variables Example File
+# Copy this file to terraform.tfvars and customize values
+
+# =============================================================================
+# PROJECT SETTINGS
+# =============================================================================
+
+project_name = "qazaqair"
+environment  = "production"
+
+# =============================================================================
+# DOMAIN AND SSL
+# =============================================================================
+
+domain_name = "your-domain.com"
+admin_email = "admin@your-domain.com"
+enable_ssl  = true
+
+# =============================================================================
+# SECURITY SETTINGS
+# =============================================================================
+
+# Change default SSH port (security through obscurity)
+ssh_port = 2222
+
+# =============================================================================
+# DATABASE CREDENTIALS
+# =============================================================================
+
+# WARNING: Change these default passwords in production!
+db_password       = "change-me-strong-password"
+zabbix_db_password = "change-me-zabbix-password"
+
+# =============================================================================
+# SERVICE PASSWORDS
+# =============================================================================
+
+# Grafana admin password (change in production!)
+grafana_admin_password = "admin"
+
+# Nagios credentials (change in production!)
+nagios_admin_user     = "nagiosadmin"
+nagios_admin_password = "nagiosadmin"
+
+# =============================================================================
+# BACKUP SETTINGS
+# =============================================================================
+
+backup_retention_days = 30
+backup_schedule       = "0 2 * * *"
+
+# =============================================================================
+# RESOURCE LIMITS
+# =============================================================================
+
+# Adjust based on your server capacity
+# resources_limits = {
+#   db = {
+#     memory = "2G"
+#     cpus   = "1.0"
+#   }
+#   backend = {
+#     memory = "1G"
+#     cpus   = "0.75"
+#   }
+# }

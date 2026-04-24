@@ -1,0 +1,681 @@
+---
+# Ansible Playbook: Monitoring Stack Setup for QazaqAir
+# Module 9: IaC - Infrastructure as Code
+
+- name: QazaqAir Monitoring Stack Setup
+  hosts: docker_hosts
+  become: yes
+  become_user: qazaqair
+  gather_facts: yes
+
+  vars:
+    app_dir: /opt/qazaqair
+    monitoring_dir: "{{ app_dir }}/monitoring"
+    grafana_admin_password: "admin"
+    prometheus_retention: "30d"
+    alertmanager_config: |
+      global:
+        smtp_smarthost: 'localhost:25'
+        smtp_from: 'alertmanager@qazaqair.kz'
+
+      route:
+        receiver: 'telegram'
+        group_by: ['alertname', 'severity']
+        group_wait: 10s
+        group_interval: 10s
+        repeat_interval: 1h
+
+      receivers:
+        - name: 'telegram'
+          telegram_configs:
+            - api_url: 'https://api.telegram.org'
+              bot_token: 'YOUR_BOT_TOKEN'
+              chat_id: 'YOUR_CHAT_ID'
+              message: |
+                {{ range .Alerts }}
+                Alert: {{ .Annotations.summary }}
+                Description: {{ .Annotations.description }}
+                Severity: {{ .Labels.severity }}
+                {{ end }}
+
+  tasks:
+    # =========================================================================
+    # CREATE MONITORING DIRECTORIES
+    # =========================================================================
+    - name: Create monitoring directories
+      file:
+        path: "{{ item }}"
+        state: directory
+        mode: '0755'
+      loop:
+        - "{{ monitoring_dir }}"
+        - "{{ monitoring_dir }}/prometheus"
+        - "{{ monitoring_dir }}/grafana/provisioning/datasources"
+        - "{{ monitoring_dir }}/grafana/provisioning/dashboards"
+        - "{{ monitoring_dir }}/alertmanager"
+        - "{{ monitoring_dir }}/blackbox"
+        - "{{ monitoring_dir }}/nagios/conf.d"
+      tags: [directories]
+
+    # =========================================================================
+    # PROMETHEUS CONFIGURATION
+    # =========================================================================
+    - name: Create Prometheus configuration
+      copy:
+        dest: "{{ monitoring_dir }}/prometheus/prometheus.yml"
+        content: |
+          global:
+            scrape_interval: 15s
+            evaluation_interval: 15s
+            external_labels:
+              monitor: 'qazaqair'
+              environment: 'production'
+
+          alerting:
+            alertmanagers:
+              - static_configs:
+                  - targets:
+                      - alertmanager:9093
+
+          rule_files:
+            - /etc/prometheus/rules/*.yml
+
+          scrape_configs:
+            # Prometheus self-monitoring
+            - job_name: 'prometheus'
+              static_configs:
+                - targets: ['localhost:9090']
+
+            # Node Exporter
+            - job_name: 'node-exporter'
+              static_configs:
+                - targets: ['node-exporter:9100']
+
+            # cAdvisor
+            - job_name: 'cadvisor'
+              static_configs:
+                - targets: ['cadvisor:8080']
+
+            # Docker containers
+            - job_name: 'docker'
+              static_configs:
+                - targets: ['cadvisor:8080']
+
+            # Backend application
+            - job_name: 'backend'
+              static_configs:
+                - targets: ['backend:8000']
+              metrics_path: /metrics
+
+            # Nginx
+            - job_name: 'nginx'
+              static_configs:
+                - targets: ['nginx-exporter:9113']
+
+            # PostgreSQL
+            - job_name: 'postgres'
+              static_configs:
+                - targets: ['postgres-exporter:9187']
+
+            # Blackbox Exporter
+            - job_name: 'blackbox-http'
+              metrics_path: /probe
+              params:
+                module: [http_2xx]
+              static_configs:
+                - targets:
+                    - http://localhost:80
+                    - http://localhost:8000
+              relabel_configs:
+                - source_labels: [__address__]
+                  target_label: __param_target
+                - source_labels: [__param_target]
+                  target_label: instance
+                - target_label: __address__
+                  replacement: blackbox-exporter:9115
+
+            # Zabbix
+            - job_name: 'zabbix-server'
+              static_configs:
+                - targets: ['zabbix-server:10051']
+        mode: '0644'
+      tags: [prometheus]
+
+    - name: Create Prometheus alert rules
+      copy:
+        dest: "{{ monitoring_dir }}/prometheus/alerts.yml"
+        content: |
+          groups:
+            - name: qazaqair-alerts
+              rules:
+                # High CPU usage
+                - alert: HighCPUUsage
+                  expr: 100 - (avg by (instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+                  for: 5m
+                  labels:
+                    severity: warning
+                  annotations:
+                    summary: "High CPU usage on {{ '{{' }} $labels.instance {{ '}}' }}"
+                    description: "CPU usage is above 80% (current value: {{ '{{' }} $value {{ '}}' }}%)"
+
+                # High memory usage
+                - alert: HighMemoryUsage
+                  expr: (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes * 100 > 85
+                  for: 5m
+                  labels:
+                    severity: warning
+                  annotations:
+                    summary: "High memory usage on {{ '{{' }} $labels.instance {{ '}}' }}"
+                    description: "Memory usage is above 85% (current value: {{ '{{' }} $value {{ '}}' }}%)"
+
+                # Disk space
+                - alert: LowDiskSpace
+                  expr: (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) * 100 < 10
+                  for: 5m
+                  labels:
+                    severity: critical
+                  annotations:
+                    summary: "Low disk space on {{ '{{' }} $labels.instance {{ '}}' }}"
+                    description: "Disk space is below 10% (current value: {{ '{{' }} $value {{ '}}' }}%)"
+
+                # Container down
+                - alert: ContainerDown
+                  expr: up == 0
+                  for: 1m
+                  labels:
+                    severity: critical
+                  annotations:
+                    summary: "Container {{ '{{' }} $labels.job {{ '}}' }} is down"
+                    description: "Container has been down for more than 1 minute"
+
+                # Database connections
+                - alert: PostgreSQLDown
+                  expr: pg_up == 0
+                  for: 1m
+                  labels:
+                    severity: critical
+                  annotations:
+                    summary: "PostgreSQL is down"
+                    description: "PostgreSQL exporter cannot connect to database"
+
+                # HTTP probe failed
+                - alert: HTTPProbeFailed
+                  expr: probe_success == 0
+                  for: 1m
+                  labels:
+                    severity: critical
+                  annotations:
+                    summary: "HTTP probe failed for {{ '{{' }} $labels.instance {{ '}}' }}"
+                    description: "HTTP endpoint is not responding"
+        mode: '0644'
+      tags: [prometheus]
+
+    # =========================================================================
+    # GRAFANA CONFIGURATION
+    # =========================================================================
+    - name: Create Grafana datasource configuration
+      copy:
+        dest: "{{ monitoring_dir }}/grafana/provisioning/datasources/prometheus.yml"
+        content: |
+          apiVersion: 1
+          datasources:
+            - name: Prometheus
+              type: prometheus
+              access: proxy
+              url: http://prometheus:9090
+              isDefault: true
+              editable: false
+        mode: '0644'
+      tags: [grafana]
+
+    - name: Create Grafana dashboard provider configuration
+      copy:
+        dest: "{{ monitoring_dir }}/grafana/provisioning/dashboards/dashboards.yml"
+        content: |
+          apiVersion: 1
+          providers:
+            - name: 'default'
+              orgId: 1
+              folder: ''
+              type: file
+              disableDeletion: false
+              editable: true
+              options:
+                path: /var/lib/grafana/dashboards
+        mode: '0644'
+      tags: [grafana]
+
+    - name: Create QazaqAir dashboard JSON
+      copy:
+        dest: "{{ monitoring_dir }}/grafana/dashboards/qazaqair-dashboard.json"
+        content: |
+          {
+            "dashboard": {
+              "id": null,
+              "title": "QazaqAir System Overview",
+              "tags": ["qazaqair", "infrastructure"],
+              "timezone": "Asia/Almaty",
+              "panels": [
+                {
+                  "id": 1,
+                  "title": "CPU Usage",
+                  "type": "stat",
+                  "targets": [
+                    {
+                      "expr": "100 - (avg by (instance) (irate(node_cpu_seconds_total{mode=\"idle\"}[5m])) * 100)",
+                      "legendFormat": "CPU %"
+                    }
+                  ],
+                  "gridPos": {"h": 4, "w": 6, "x": 0, "y": 0}
+                },
+                {
+                  "id": 2,
+                  "title": "Memory Usage",
+                  "type": "stat",
+                  "targets": [
+                    {
+                      "expr": "(node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes * 100",
+                      "legendFormat": "Memory %"
+                    }
+                  ],
+                  "gridPos": {"h": 4, "w": 6, "x": 6, "y": 0}
+                },
+                {
+                  "id": 3,
+                  "title": "Disk Usage",
+                  "type": "stat",
+                  "targets": [
+                    {
+                      "expr": "100 - ((node_filesystem_avail_bytes{mountpoint=\"/\"} * 100) / node_filesystem_size_bytes{mountpoint=\"/\"})",
+                      "legendFormat": "Disk %"
+                    }
+                  ],
+                  "gridPos": {"h": 4, "w": 6, "x": 12, "y": 0}
+                },
+                {
+                  "id": 4,
+                  "title": "Container Status",
+                  "type": "stat",
+                  "targets": [
+                    {
+                      "expr": "up",
+                      "legendFormat": "{{job}}"
+                    }
+                  ],
+                  "gridPos": {"h": 4, "w": 6, "x": 18, "y": 0}
+                }
+              ],
+              "time": {
+                "from": "now-1h",
+                "to": "now"
+              },
+              "refresh": "30s"
+            }
+          }
+        mode: '0644'
+      tags: [grafana]
+
+    # =========================================================================
+    # ALERTMANAGER CONFIGURATION
+    # =========================================================================
+    - name: Create Alertmanager configuration
+      copy:
+        dest: "{{ monitoring_dir }}/alertmanager/alertmanager.yml"
+        content: "{{ alertmanager_config }}"
+        mode: '0644'
+      tags: [alertmanager]
+
+    # =========================================================================
+    # BLACKBOX EXPORTER CONFIGURATION
+    # =========================================================================
+    - name: Create Blackbox exporter configuration
+      copy:
+        dest: "{{ monitoring_dir }}/blackbox/blackbox.yml"
+        content: |
+          modules:
+            http_2xx:
+              prober: http
+              timeout: 5s
+              http:
+                method: GET
+                follow_redirects: true
+                fail_if_ssl: false
+                tls_config:
+                  insecure_skip_verify: true
+
+            http_post_2xx:
+              prober: http
+              timeout: 5s
+              http:
+                method: POST
+                follow_redirects: true
+
+            tcp_connect:
+              prober: tcp
+              timeout: 5s
+
+            icmp:
+              prober: icmp
+              timeout: 5s
+        mode: '0644'
+      tags: [blackbox]
+
+    # =========================================================================
+    # NAGIOS CONFIGURATION
+    # =========================================================================
+    - name: Create Nagios main configuration
+      copy:
+        dest: "{{ monitoring_dir }}/nagios/nagios.cfg"
+        content: |
+          # Nagios Core Configuration File
+          log_file=/opt/nagios/var/nagios.log
+          cfg_file=/opt/nagios/etc/objects/commands.cfg
+          cfg_file=/opt/nagios/etc/objects/contacts.cfg
+          cfg_file=/opt/nagios/etc/objects/timeperiods.cfg
+          cfg_file=/opt/nagios/etc/objects/templates.cfg
+          cfg_dir=/opt/nagios/etc/conf.d
+          object_cache_file=/opt/nagios/var/objects.cache
+          precached_object_file=/opt/nagios/var/objects.precache
+          resource_file=/opt/nagios/etc/resource.cfg
+          status_file=/opt/nagios/var/status.dat
+          status_update_interval=10
+          nagios_user=nagios
+          nagios_group=nagios
+          check_external_commands=1
+          command_file=/opt/nagios/var/rw/nagios.cmd
+          lock_file=/opt/nagios/var/nagios.lock
+          temp_file=/opt/nagios/var/nagios.tmp
+          temp_path=/tmp
+          event_broker_options=-1
+          log_rotation_method=d
+          log_archive_path=/opt/nagios/var/archives
+          use_syslog=1
+          log_notifications=1
+          log_service_retries=1
+          log_host_retries=1
+          log_event_handlers=1
+          log_initial_states=0
+          log_external_commands=1
+          log_passive_checks=1
+          service_inter_check_delay_method=s
+          max_service_check_spread=30
+          service_interleave_factor=s
+          host_inter_check_delay_method=s
+          max_host_check_spread=30
+          max_concurrent_checks=0
+          check_result_reaper_frequency=10
+          max_check_result_reaper_time=30
+          check_result_path=/opt/nagios/var/spool/checkresults
+          max_check_result_file_age=3600
+          cached_host_check_horizon=15
+          cached_service_check_horizon=15
+          enable_predictive_host_dependency_checks=1
+          enable_predictive_service_dependency_checks=1
+          soft_state_dependencies=0
+          auto_reschedule_checks=0
+          auto_rescheduling_interval=30
+          auto_rescheduling_window=180
+          sleep_time=0.25
+          service_check_timeout=60
+          host_check_timeout=30
+          event_handler_timeout=30
+          notification_timeout=30
+          ocsp_timeout=5
+          ochp_timeout=5
+          perfdata_timeout=5
+          retain_state_information=1
+          state_retention_file=/opt/nagios/var/retention.dat
+          retention_update_interval=60
+          use_retained_program_state=1
+          use_retained_scheduling_info=1
+          retained_host_attribute_mask=0
+          retained_service_attribute_mask=0
+          retained_process_host_attribute_mask=0
+          retained_process_service_attribute_mask=0
+          retained_contact_host_attribute_mask=0
+          retained_contact_service_attribute_mask=0
+          interval_length=60
+          use_aggressive_host_checking=0
+          execute_service_checks=1
+          accept_passive_service_checks=1
+          execute_host_checks=1
+          accept_passive_host_checks=1
+          enable_notifications=1
+          enable_event_handlers=1
+          process_performance_data=1
+          obsess_over_services=0
+          obsess_over_hosts=0
+          translate_passive_host_checks=0
+          passive_host_checks_are_soft=0
+          check_for_orphaned_services=1
+          check_for_orphaned_hosts=1
+          check_service_freshness=1
+          service_freshness_check_interval=60
+          check_host_freshness=0
+          host_freshness_check_interval=60
+          additional_freshness_latency=15
+          enable_flap_detection=1
+          low_service_flap_threshold=5.0
+          high_service_flap_threshold=20.0
+          low_host_flap_threshold=5.0
+          high_host_flap_threshold=20.0
+          date_format=us
+          illegal_object_name_chars=`~!$%^&*|"'<>?,()=
+          illegal_macro_output_chars=`~$&|"'<>
+          use_regexp_matching=0
+          use_true_regexp_matching=0
+          admin_email=nagios@localhost
+          admin_pager=pagenagios@localhost
+          daemon_dumps_core=0
+        mode: '0644'
+      tags: [nagios]
+
+    - name: Create Nagios localhost configuration
+      copy:
+        dest: "{{ monitoring_dir }}/nagios/conf.d/localhost.cfg"
+        content: |
+          define host {
+              use                     linux-server
+              host_name               localhost
+              alias                   Localhost
+              address                 127.0.0.1
+              check_command           check-host-alive
+              max_check_attempts      5
+              check_period            24x7
+              notification_interval   30
+              notification_period     24x7
+          }
+
+          define service {
+              use                     generic-service
+              host_name               localhost
+              service_description     HTTP
+              check_command           check_http
+              max_check_attempts      3
+              check_interval          5
+              retry_interval          1
+              check_period            24x7
+              notification_interval   30
+              notification_period     24x7
+          }
+
+          define service {
+              use                     generic-service
+              host_name               localhost
+              service_description     SSH
+              check_command           check_ssh
+              max_check_attempts      3
+              check_interval          5
+              retry_interval          1
+              check_period            24x7
+              notification_interval   30
+              notification_period     24x7
+          }
+
+          define service {
+              use                     generic-service
+              host_name               localhost
+              service_description     Disk Usage
+              check_command           check_local_disk!20%!10%!/
+              max_check_attempts      3
+              check_interval          5
+              retry_interval          1
+              check_period            24x7
+              notification_interval   30
+              notification_period     24x7
+          }
+
+          define service {
+              use                     generic-service
+              host_name               localhost
+              service_description     Current Users
+              check_command           check_local_users!20!50
+              max_check_attempts      3
+              check_interval          5
+              retry_interval          1
+              check_period            24x7
+              notification_interval   30
+              notification_period     24x7
+          }
+
+          define service {
+              use                     generic-service
+              host_name               localhost
+              service_description     Total Processes
+              check_command           check_local_procs!250!400!RSZDT
+              max_check_attempts      3
+              check_interval          5
+              retry_interval          1
+              check_period            24x7
+              notification_interval   30
+              notification_period     24x7
+          }
+
+          define service {
+              use                     generic-service
+              host_name               localhost
+              service_description     Current Load
+              check_command           check_local_load!5.0!4.0!3.0!6.0!5.0!4.0
+              max_check_attempts      3
+              check_interval          5
+              retry_interval          1
+              check_period            24x7
+              notification_interval   30
+              notification_period     24x7
+          }
+        mode: '0644'
+      tags: [nagios]
+
+    # =========================================================================
+    # DOCKER COMPOSE FOR MONITORING
+    # =========================================================================
+    - name: Create monitoring docker-compose file
+      copy:
+        dest: "{{ monitoring_dir }}/docker-compose.yml"
+        content: |
+          version: '3.8'
+
+          services:
+            prometheus:
+              image: prom/prometheus:latest
+              container_name: qazaqair-prometheus
+              restart: unless-stopped
+              user: root
+              volumes:
+                - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+                - ./prometheus/alerts.yml:/etc/prometheus/rules/alerts.yml:ro
+                - prometheus_data:/prometheus
+              command:
+                - '--config.file=/etc/prometheus/prometheus.yml'
+                - '--storage.tsdb.path=/prometheus'
+                - '--storage.tsdb.retention.time=30d'
+                - '--storage.tsdb.retention.size=10GB'
+              ports:
+                - "9090:9090"
+              networks:
+                - monitoring
+
+            grafana:
+              image: grafana/grafana:latest
+              container_name: qazaqair-grafana
+              restart: unless-stopped
+              user: root
+              environment:
+                - GF_SECURITY_ADMIN_PASSWORD={{ grafana_admin_password }}
+                - GF_USERS_ALLOW_SIGN_UP=false
+              volumes:
+                - ./grafana/provisioning:/etc/grafana/provisioning:ro
+                - grafana_data:/var/lib/grafana
+              ports:
+                - "3000:3000"
+              networks:
+                - monitoring
+              depends_on:
+                - prometheus
+
+            alertmanager:
+              image: prom/alertmanager:latest
+              container_name: qazaqair-alertmanager
+              restart: unless-stopped
+              volumes:
+                - ./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+                - alertmanager_data:/alertmanager
+              command:
+                - '--config.file=/etc/alertmanager/alertmanager.yml'
+                - '--storage.path=/alertmanager'
+              ports:
+                - "9093:9093"
+              networks:
+                - monitoring
+
+          volumes:
+            prometheus_data:
+            grafana_data:
+            alertmanager_data:
+
+          networks:
+            monitoring:
+              driver: bridge
+        mode: '0644'
+      tags: [compose]
+
+    # =========================================================================
+    # VERIFICATION
+    # =========================================================================
+    - name: Verify configuration files exist
+      stat:
+        path: "{{ item }}"
+      loop:
+        - "{{ monitoring_dir }}/prometheus/prometheus.yml"
+        - "{{ monitoring_dir }}/grafana/provisioning/datasources/prometheus.yml"
+        - "{{ monitoring_dir }}/alertmanager/alertmanager.yml"
+        - "{{ monitoring_dir }}/blackbox/blackbox.yml"
+        - "{{ monitoring_dir }}/nagios/nagios.cfg"
+        - "{{ monitoring_dir }}/docker-compose.yml"
+      register: config_files
+      tags: [verify]
+
+    - name: Print monitoring setup summary
+      debug:
+        msg:
+          - "Monitoring directory: {{ monitoring_dir }}"
+          - "Grafana admin password: {{ grafana_admin_password }}"
+          - "Configuration files created: {{ config_files.results | selectattr('stat.exists') | list | length }}/{{ config_files.results | length }}"
+          - ""
+          - "To start monitoring stack:"
+          - "  cd {{ monitoring_dir }} && docker-compose up -d"
+          - ""
+          - "Access URLs:"
+          - "  - Grafana: http://localhost:3000"
+          - "  - Prometheus: http://localhost:9090"
+          - "  - Alertmanager: http://localhost:9093"
+      tags: [verify]
+
+  handlers:
+    - name: reload prometheus
+      docker_container:
+        name: prometheus
+        state: started
+        restart: yes
+      become: yes
+      ignore_errors: yes

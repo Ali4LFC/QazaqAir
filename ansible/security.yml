@@ -1,0 +1,424 @@
+---
+# Ansible Playbook: Security Hardening for QazaqAir
+# Module 9: IaC - Infrastructure as Code
+
+- name: QazaqAir Security Hardening
+  hosts: docker_hosts
+  become: yes
+  gather_facts: yes
+
+  vars:
+    ssh_port: 2222
+    allowed_ports:
+      - "22"
+      - "80"
+      - "443"
+      - "2222"
+      - "8000"
+      - "3000"
+      - "3001"
+      - "5432"
+      - "5678"
+      - "8080"
+      - "8082"
+      - "8083"
+      - "8085"
+      - "8086"
+      - "9000"
+      - "9090"
+      - "9093"
+      - "9100"
+      - "9113"
+      - "9115"
+      - "9187"
+      - "10050"
+      - "10051"
+    fail2ban_services:
+      - sshd
+      - nginx
+      - docker
+    max_auth_tries: 3
+    client_alive_interval: 300
+    client_alive_count_max: 2
+
+  tasks:
+    # =========================================================================
+    # UFW (UNCOMPLICATED FIREWALL) CONFIGURATION
+    # =========================================================================
+    - name: Install UFW
+      apt:
+        name: ufw
+        state: present
+      tags: [firewall]
+
+    - name: Reset UFW to default
+      command: ufw --force reset
+      tags: [firewall]
+
+    - name: Set UFW default policies
+      ufw:
+        direction: "{{ item.direction }}"
+        policy: "{{ item.policy }}"
+      loop:
+        - { direction: 'incoming', policy: 'deny' }
+        - { direction: 'outgoing', policy: 'allow' }
+        - { direction: 'routed', policy: 'deny' }
+      tags: [firewall]
+
+    - name: Allow SSH port
+      ufw:
+        rule: allow
+        port: "22"
+        proto: tcp
+      tags: [firewall]
+
+    - name: Allow custom SSH port
+      ufw:
+        rule: allow
+        port: "{{ ssh_port }}"
+        proto: tcp
+      tags: [firewall]
+
+    - name: Allow HTTP
+      ufw:
+        rule: allow
+        port: '80'
+        proto: tcp
+      tags: [firewall]
+
+    - name: Allow HTTPS
+      ufw:
+        rule: allow
+        port: '443'
+        proto: tcp
+      tags: [firewall]
+
+    - name: Allow application ports
+      ufw:
+        rule: allow
+        port: "{{ item }}"
+        proto: tcp
+      loop: "{{ allowed_ports | difference(['22', '80', '443', ssh_port]) }}"
+      tags: [firewall]
+
+    - name: Enable UFW
+      ufw:
+        state: enabled
+      tags: [firewall]
+
+    # =========================================================================
+    # FAIL2BAN CONFIGURATION
+    # =========================================================================
+    - name: Install Fail2Ban
+      apt:
+        name: fail2ban
+        state: present
+      tags: [fail2ban]
+
+    - name: Configure Fail2Ban jail.local
+      copy:
+        dest: /etc/fail2ban/jail.local
+        content: |
+          [DEFAULT]
+          bantime = 1h
+          findtime = 10m
+          maxretry = 5
+          backend = auto
+          usedns = warn
+          logencoding = auto
+          enabled = false
+          mode = normal
+          filter = %(program_name)s[mode=%(mode)s]
+          destemail = admin@qazaqair.kz
+          sender = fail2ban@qazaqair.kz
+          mta = sendmail
+          protocol = tcp
+          chain = <known/chain>
+          port = 0:65535
+          fail2ban_agent = Fail2Ban/%(fail2ban_version)s
+          banaction = ufw
+          banaction_allports = ufw
+          action_ = %(banaction)s[name="%(name)s", bantime="%(bantime)s", port="%(port)s", protocol="%(protocol)s", chain="%(chain)s"]
+          action_mw = %(banaction)s[name="%(name)s", bantime="%(bantime)s", port="%(port)s", protocol="%(protocol)s", chain="%(chain)s"]
+                      %(mta)s-whois[name="%(name)s", sender="%(sender)s", dest="%(destemail)s", protocol="%(protocol)s", chain="%(chain)s"]
+          action_mwl = %(banaction)s[name="%(name)s", bantime="%(bantime)s", port="%(port)s", protocol="%(protocol)s", chain="%(chain)s"]
+                       %(mta)s-whois-lines[name="%(name)s", sender="%(sender)s", dest="%(destemail)s", logpath="%(logpath)s", chain="%(chain)s"]
+          action = %(action_)s
+
+          [sshd]
+          enabled = true
+          port = ssh,{{ ssh_port }}
+          filter = sshd
+          logpath = /var/log/auth.log
+          maxretry = 3
+          bantime = 3600
+          findtime = 600
+
+          [nginx-http-auth]
+          enabled = true
+          port = http,https
+          filter = nginx-http-auth
+          logpath = /var/log/nginx/error.log
+          maxretry = 5
+
+          [nginx-badbots]
+          enabled = true
+          port = http,https
+          filter = nginx-badbots
+          logpath = /var/log/nginx/access.log
+          maxretry = 2
+
+          [nginx-noscript]
+          enabled = true
+          port = http,https
+          filter = nginx-noscript
+          logpath = /var/log/nginx/access.log
+          maxretry = 6
+
+          [docker]
+          enabled = true
+          port = all
+          filter = docker
+          logpath = /var/log/syslog
+          maxretry = 5
+          bantime = 7200
+
+          [recidive]
+          enabled = true
+          filter = recidive
+          logpath = /var/log/fail2ban.log
+          action = %(action_mwl)s
+          bantime = 1w
+          findtime = 1d
+        mode: '0644'
+      notify: restart fail2ban
+      tags: [fail2ban]
+
+    - name: Start and enable Fail2Ban
+      systemd:
+        name: fail2ban
+        state: started
+        enabled: yes
+      tags: [fail2ban]
+
+    # =========================================================================
+    # SSH HARDENING
+    # =========================================================================
+    - name: Backup original SSH config
+      copy:
+        src: /etc/ssh/sshd_config
+        dest: /etc/ssh/sshd_config.backup.{{ ansible_date_time.date }}
+        remote_src: yes
+      tags: [ssh]
+
+    - name: Configure SSH hardening
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: "{{ item.regexp }}"
+        line: "{{ item.line }}"
+        state: present
+        backup: yes
+      loop:
+        - { regexp: '^#?Port ', line: 'Port {{ ssh_port }}' }
+        - { regexp: '^#?PermitRootLogin', line: 'PermitRootLogin no' }
+        - { regexp: '^#?PasswordAuthentication', line: 'PasswordAuthentication no' }
+        - { regexp: '^#?PubkeyAuthentication', line: 'PubkeyAuthentication yes' }
+        - { regexp: '^#?MaxAuthTries', line: 'MaxAuthTries {{ max_auth_tries }}' }
+        - { regexp: '^#?ClientAliveInterval', line: 'ClientAliveInterval {{ client_alive_interval }}' }
+        - { regexp: '^#?ClientAliveCountMax', line: 'ClientAliveCountMax {{ client_alive_count_max }}' }
+        - { regexp: '^#?AllowUsers', line: 'AllowUsers {{ ansible_user }}' }
+        - { regexp: '^#?X11Forwarding', line: 'X11Forwarding no' }
+        - { regexp: '^#?AllowTcpForwarding', line: 'AllowTcpForwarding no' }
+        - { regexp: '^#?PermitTunnel', line: 'PermitTunnel no' }
+        - { regexp: '^#?Banner', line: 'Banner /etc/ssh/banner' }
+      notify: restart ssh
+      tags: [ssh]
+
+    - name: Create SSH banner
+      copy:
+        dest: /etc/ssh/banner
+        content: |
+          ========================================
+          WARNING: Authorized Access Only
+          ========================================
+          This system is for authorized users only.
+          All activities may be monitored and recorded.
+          ========================================
+        mode: '0644'
+      tags: [ssh]
+
+    # =========================================================================
+    # SSL/TLS CERTIFICATES SETUP
+    # =========================================================================
+    - name: Install Certbot
+      apt:
+        name:
+          - certbot
+          - python3-certbot-nginx
+        state: present
+      tags: [ssl]
+
+    - name: Create SSL directory
+      file:
+        path: /opt/qazaqair/certs
+        state: directory
+        mode: '0755'
+      tags: [ssl]
+
+    - name: Generate self-signed SSL certificate (for development)
+      command: |
+        openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+          -keyout /opt/qazaqair/certs/key.pem \
+          -out /opt/qazaqair/certs/cert.pem \
+          -subj "/C=KZ/ST=Almaty/L=Almaty/O=QazaqAir/OU=IT/CN=localhost"
+      args:
+        creates: /opt/qazaqair/certs/cert.pem
+      tags: [ssl]
+
+    - name: Set SSL certificate permissions
+      file:
+        path: /opt/qazaqair/certs/{{ item }}
+        mode: '0644'
+      loop:
+        - cert.pem
+        - key.pem
+      tags: [ssl]
+
+    # =========================================================================
+    # KERNEL HARDENING (SYSCTL)
+    # =========================================================================
+    - name: Configure kernel security parameters
+      sysctl:
+        name: "{{ item.name }}"
+        value: "{{ item.value }}"
+        state: present
+        reload: yes
+        sysctl_file: /etc/sysctl.d/99-security.conf
+      loop:
+        # IP Spoofing protection
+        - { name: 'net.ipv4.conf.all.rp_filter', value: '1' }
+        - { name: 'net.ipv4.conf.default.rp_filter', value: '1' }
+        # Ignore ICMP broadcast requests
+        - { name: 'net.ipv4.icmp_echo_ignore_broadcasts', value: '1' }
+        # Ignore bogus ICMP errors
+        - { name: 'net.ipv4.icmp_ignore_bogus_error_responses', value: '1' }
+        # Do not accept source routed packets
+        - { name: 'net.ipv4.conf.all.accept_source_route', value: '0' }
+        - { name: 'net.ipv4.conf.default.accept_source_route', value: '0' }
+        # Disable send redirects
+        - { name: 'net.ipv4.conf.all.send_redirects', value: '0' }
+        - { name: 'net.ipv4.conf.default.send_redirects', value: '0' }
+        # Disable accept redirects
+        - { name: 'net.ipv4.conf.all.accept_redirects', value: '0' }
+        - { name: 'net.ipv4.conf.default.accept_redirects', value: '0' }
+        # Log suspicious packets
+        - { name: 'net.ipv4.conf.all.log_martians', value: '1' }
+        # Enable SYN Cookies
+        - { name: 'net.ipv4.tcp_syncookies', value: '1' }
+        # Disable IPv6 if not needed
+        - { name: 'net.ipv6.conf.all.disable_ipv6', value: '1' }
+        - { name: 'net.ipv6.conf.default.disable_ipv6', value: '1' }
+      tags: [sysctl]
+
+    # =========================================================================
+    # AUTOMATIC SECURITY UPDATES
+    # =========================================================================
+    - name: Install unattended-upgrades
+      apt:
+        name: unattended-upgrades
+        state: present
+      tags: [updates]
+
+    - name: Configure automatic security updates
+      copy:
+        dest: /etc/apt/apt.conf.d/50unattended-upgrades
+        content: |
+          Unattended-Upgrade::Allowed-Origins {
+              "${distro_id}:${distro_codename}-security";
+              "${distro_id}ESMApps:${distro_codename}-apps-security";
+              "${distro_id}ESM:${distro_codename}-infra-security";
+          };
+          Unattended-Upgrade::Package-Blacklist {
+          };
+          Unattended-Upgrade::Automatic-Reboot "false";
+          Unattended-Upgrade::Automatic-Reboot-Time "02:00";
+        mode: '0644'
+      tags: [updates]
+
+    - name: Enable unattended-upgrades
+      command: dpkg-reconfigure -plow unattended-upgrades
+      tags: [updates]
+
+    # =========================================================================
+    # AUDITING AND LOGGING
+    # =========================================================================
+    - name: Install auditd
+      apt:
+        name: auditd
+        state: present
+      tags: [audit]
+
+    - name: Configure audit rules for Docker
+      copy:
+        dest: /etc/audit/rules.d/docker.rules
+        content: |
+          # Monitor Docker socket
+          -w /var/run/docker.sock -p rwxa -k docker
+          # Monitor Docker configuration
+          -w /etc/docker/ -p wa -k docker
+          # Monitor Docker daemon
+          -w /usr/bin/docker -p x -k docker
+          -w /usr/bin/dockerd -p x -k docker
+        mode: '0644'
+      notify: restart auditd
+      tags: [audit]
+
+    - name: Start and enable auditd
+      systemd:
+        name: auditd
+        state: started
+        enabled: yes
+      tags: [audit]
+
+    # =========================================================================
+    # SECURITY VERIFICATION
+    # =========================================================================
+    - name: Check UFW status
+      command: ufw status verbose
+      register: ufw_status
+      changed_when: false
+      tags: [verify]
+
+    - name: Check Fail2Ban status
+      command: fail2ban-client status
+      register: fail2ban_status
+      changed_when: false
+      ignore_errors: yes
+      tags: [verify]
+
+    - name: Print security summary
+      debug:
+        msg:
+          - "SSH Port: {{ ssh_port }}"
+          - "UFW Status: {{ ufw_status.stdout_lines[0] }}"
+          - "Fail2Ban: {{ fail2ban_status.stdout | default('Not running') }}"
+          - "Root Login: Disabled"
+          - "Password Auth: Disabled"
+          - "Key Auth: Enabled"
+      tags: [verify]
+
+  handlers:
+    - name: restart fail2ban
+      systemd:
+        name: fail2ban
+        state: restarted
+
+    - name: restart ssh
+      systemd:
+        name: ssh
+        state: restarted
+
+    - name: restart auditd
+      systemd:
+        name: auditd
+        state: restarted
