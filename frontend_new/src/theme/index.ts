@@ -15,13 +15,48 @@ export const aqiColors = {
 // Glassmorphism styles
 const glassStyles = {
   background: 'rgba(22, 27, 34, 0.7)',
-  backdropFilter: 'blur(12px)',
+  backdropFilter: 'blur(16px)',
   border: '1px solid rgba(255, 255, 255, 0.1)',
   borderRadius: '16px',
+  boxShadow: '0 14px 36px rgba(0, 0, 0, 0.28)',
+};
+
+const appTypography: ThemeOptions['typography'] = {
+  fontFamily: "'Outfit', 'Roboto', 'Helvetica', 'Arial', sans-serif",
+  h1: {
+    fontWeight: 700,
+    fontSize: '1.8rem',
+  },
+  h2: {
+    fontWeight: 600,
+    fontSize: '1.5rem',
+  },
+  h3: {
+    fontWeight: 600,
+    fontSize: '1.2rem',
+  },
+  h4: {
+    fontWeight: 600,
+    fontSize: '1rem',
+  },
+  button: {
+    textTransform: 'none',
+    fontWeight: 600,
+    letterSpacing: '0.01em',
+  },
+  body1: {
+    lineHeight: 1.55,
+  },
+  body2: {
+    lineHeight: 1.5,
+  },
 };
 
 // Dark theme configuration
 const darkThemeOptions: ThemeOptions = {
+  shape: {
+    borderRadius: 14,
+  },
   palette: {
     mode: 'dark',
     background: {
@@ -42,35 +77,17 @@ const darkThemeOptions: ThemeOptions = {
       primary: '#f0f6fc',
       secondary: '#8b949e',
     },
+    action: {
+      hover: 'rgba(88, 166, 255, 0.12)',
+      selected: 'rgba(88, 166, 255, 0.2)',
+    },
     divider: 'rgba(255, 255, 255, 0.1)',
     error: { main: '#ff0000' },
     warning: { main: '#ff7e00' },
     success: { main: '#00e400' },
     info: { main: '#8f3f97' },
   },
-  typography: {
-    fontFamily: "'Outfit', 'Roboto', 'Helvetica', 'Arial', sans-serif",
-    h1: {
-      fontWeight: 700,
-      fontSize: '1.8rem',
-    },
-    h2: {
-      fontWeight: 600,
-      fontSize: '1.5rem',
-    },
-    h3: {
-      fontWeight: 600,
-      fontSize: '1.2rem',
-    },
-    h4: {
-      fontWeight: 600,
-      fontSize: '1rem',
-    },
-    button: {
-      textTransform: 'none',
-      fontWeight: 500,
-    },
-  },
+  typography: appTypography,
   components: {
     MuiCssBaseline: {
       styleOverrides: {
@@ -109,6 +126,12 @@ const darkThemeOptions: ThemeOptions = {
         root: {
           ...glassStyles,
           overflow: 'hidden',
+          transition: 'transform 0.2s ease, box-shadow 0.25s ease, border-color 0.2s ease',
+          '&:hover': {
+            transform: 'translateY(-2px)',
+            boxShadow: '0 18px 34px rgba(0, 0, 0, 0.32)',
+            borderColor: 'rgba(88, 166, 255, 0.35)',
+          },
         },
       },
     },
@@ -118,12 +141,15 @@ const darkThemeOptions: ThemeOptions = {
           borderRadius: '12px',
           padding: '8px 16px',
           transition: 'all 0.2s ease',
+          fontWeight: 600,
         },
         contained: {
-          background: 'rgba(88, 166, 255, 0.2)',
+          background: 'linear-gradient(135deg, rgba(88, 166, 255, 0.4), rgba(188, 133, 255, 0.26))',
           border: '1px solid rgba(88, 166, 255, 0.3)',
+          boxShadow: '0 8px 18px rgba(56, 139, 253, 0.22)',
           '&:hover': {
-            background: 'rgba(88, 166, 255, 0.3)',
+            background: 'linear-gradient(135deg, rgba(88, 166, 255, 0.56), rgba(188, 133, 255, 0.34))',
+            boxShadow: '0 10px 22px rgba(56, 139, 253, 0.3)',
           },
         },
         outlined: {
@@ -145,9 +171,11 @@ const darkThemeOptions: ThemeOptions = {
           width: '36px',
           height: '36px',
           padding: 0,
+          transition: 'all 0.2s ease',
           '&:hover': {
             background: 'rgba(88, 166, 255, 0.2)',
             borderColor: 'rgba(88, 166, 255, 0.5)',
+            transform: 'translateY(-1px)',
           },
         },
       },
@@ -238,10 +266,18 @@ const darkThemeOptions: ThemeOptions = {
         },
       },
     },
+    MuiListItemButton: {
+      styleOverrides: {
+        root: {
+          borderRadius: '12px',
+          transition: 'all 0.2s ease',
+        },
+      },
+    },
     MuiAppBar: {
       styleOverrides: {
         root: {
-          background: 'rgba(13, 17, 23, 0.8)',
+          background: 'linear-gradient(180deg, rgba(13, 17, 23, 0.9), rgba(13, 17, 23, 0.76))',
           backdropFilter: 'blur(12px)',
           borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
         },
@@ -259,6 +295,9 @@ const darkThemeOptions: ThemeOptions = {
 
 // Light theme
 const lightThemeOptions: ThemeOptions = {
+  shape: {
+    borderRadius: 14,
+  },
   palette: {
     mode: 'light',
     background: {
@@ -279,8 +318,13 @@ const lightThemeOptions: ThemeOptions = {
       primary: '#24292f',
       secondary: '#57606a',
     },
+    action: {
+      hover: 'rgba(88, 166, 255, 0.08)',
+      selected: 'rgba(88, 166, 255, 0.14)',
+    },
     divider: 'rgba(0, 0, 0, 0.08)',
   },
+  typography: appTypography,
   components: {
     MuiCssBaseline: {
       styleOverrides: {
@@ -325,6 +369,13 @@ const lightThemeOptions: ThemeOptions = {
           border: '1px solid rgba(0, 0, 0, 0.08)',
           borderRadius: '16px',
           overflow: 'hidden',
+          boxShadow: '0 12px 28px rgba(15, 23, 42, 0.08)',
+          transition: 'transform 0.2s ease, box-shadow 0.25s ease, border-color 0.2s ease',
+          '&:hover': {
+            transform: 'translateY(-2px)',
+            boxShadow: '0 16px 32px rgba(15, 23, 42, 0.12)',
+            borderColor: 'rgba(88, 166, 255, 0.35)',
+          },
         },
       },
     },
@@ -334,12 +385,15 @@ const lightThemeOptions: ThemeOptions = {
           borderRadius: '12px',
           padding: '8px 16px',
           transition: 'all 0.2s ease',
+          fontWeight: 600,
         },
         contained: {
-          background: 'rgba(88, 166, 255, 0.15)',
+          background: 'linear-gradient(135deg, rgba(88, 166, 255, 0.22), rgba(188, 133, 255, 0.14))',
           border: '1px solid rgba(88, 166, 255, 0.25)',
+          boxShadow: '0 8px 18px rgba(56, 139, 253, 0.12)',
           '&:hover': {
-            background: 'rgba(88, 166, 255, 0.25)',
+            background: 'linear-gradient(135deg, rgba(88, 166, 255, 0.34), rgba(188, 133, 255, 0.2))',
+            boxShadow: '0 10px 22px rgba(56, 139, 253, 0.18)',
           },
         },
         outlined: {
@@ -361,9 +415,11 @@ const lightThemeOptions: ThemeOptions = {
           width: '36px',
           height: '36px',
           padding: 0,
+          transition: 'all 0.2s ease',
           '&:hover': {
             background: 'rgba(88, 166, 255, 0.15)',
             borderColor: 'rgba(88, 166, 255, 0.4)',
+            transform: 'translateY(-1px)',
           },
         },
       },
@@ -458,10 +514,18 @@ const lightThemeOptions: ThemeOptions = {
         },
       },
     },
+    MuiListItemButton: {
+      styleOverrides: {
+        root: {
+          borderRadius: '12px',
+          transition: 'all 0.2s ease',
+        },
+      },
+    },
     MuiAppBar: {
       styleOverrides: {
         root: {
-          background: 'rgba(255, 255, 255, 0.85)',
+          background: 'linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(255, 255, 255, 0.82))',
           backdropFilter: 'blur(12px)',
           borderBottom: '1px solid rgba(0, 0, 0, 0.08)',
         },

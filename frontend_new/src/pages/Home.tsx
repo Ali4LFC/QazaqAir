@@ -103,13 +103,20 @@ const PulseIndicator = () => (
 // Glass card style - адаптивный к теме
 const getGlassCardSx = (isDark: boolean) => ({
   background: isDark ? 'rgba(22, 27, 34, 0.7)' : 'rgba(255, 255, 255, 0.9)',
-  backdropFilter: 'blur(12px)',
+  backdropFilter: 'blur(16px)',
   border: isDark ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid rgba(0, 0, 0, 0.08)',
   borderRadius: '16px',
+  boxShadow: isDark ? '0 14px 36px rgba(0, 0, 0, 0.28)' : '0 12px 28px rgba(15, 23, 42, 0.08)',
+  transition: 'transform 0.2s ease, box-shadow 0.25s ease, border-color 0.2s ease',
+  '&:hover': {
+    transform: 'translateY(-2px)',
+    boxShadow: isDark ? '0 18px 34px rgba(0, 0, 0, 0.32)' : '0 16px 32px rgba(15, 23, 42, 0.12)',
+    borderColor: 'rgba(88, 166, 255, 0.35)',
+  },
 });
 
 // Адаптивные цвета для мелких карточек (темп/влаж/ветер)
-const getMetricCardBg = (isDark: boolean) => isDark ? 'rgba(31, 35, 41, 0.8)' : '#ffffff';
+const getMetricCardBg = (isDark: boolean) => isDark ? 'rgba(31, 35, 41, 0.8)' : 'rgba(255, 255, 255, 0.96)';
 
 // Адаптивный футер
 const getFooterBg = (isDark: boolean) => isDark ? '#0d1117' : '#f6f8fa';
@@ -251,10 +258,20 @@ export function Home() {
   }
 
   return (
-    <Box sx={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', bgcolor: 'background.default' }}>
+    <Box
+      sx={{
+        minHeight: '100vh',
+        display: 'flex',
+        flexDirection: 'column',
+        bgcolor: 'background.default',
+        backgroundImage: (theme) => theme.palette.mode === 'dark'
+          ? 'radial-gradient(circle at 20% 0%, rgba(88, 166, 255, 0.14), transparent 34%), radial-gradient(circle at 80% 0%, rgba(188, 133, 255, 0.12), transparent 30%)'
+          : 'radial-gradient(circle at 20% 0%, rgba(88, 166, 255, 0.1), transparent 36%), radial-gradient(circle at 80% 0%, rgba(188, 133, 255, 0.08), transparent 32%)',
+      }}
+    >
       {/* Header */}
       <AppBar position="sticky" elevation={0}>
-        <Toolbar sx={{ justifyContent: 'space-between' }}>
+        <Toolbar sx={{ justifyContent: 'space-between', py: 0.5 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
             <PulseIndicator />
             <Typography
@@ -266,6 +283,7 @@ export function Home() {
                 WebkitBackgroundClip: 'text',
                 WebkitTextFillColor: 'transparent',
                 backgroundClip: 'text',
+                letterSpacing: '0.01em',
               }}
             >
               QazaqAir
@@ -299,7 +317,7 @@ export function Home() {
       </AppBar>
 
       {/* Main Content */}
-      <Container maxWidth="xl" sx={{ flex: 1, py: 4 }}>
+      <Container maxWidth="xl" sx={{ flex: 1, py: { xs: 2.5, md: 4 } }}>
         {error && (
           <Box sx={{ mb: 2, p: 2, bgcolor: 'error.main', borderRadius: 2, color: 'error.contrastText' }}>
             {error}
@@ -344,7 +362,7 @@ export function Home() {
 
                 <Grid container spacing={1} sx={{ mb: 2 }}>
                   <Grid size={{ xs: 4 }}>
-                    <Card sx={{ bgcolor: getMetricCardBg(muiTheme.palette.mode === 'dark'), textAlign: 'center', p: 1 }}>
+                    <Card sx={{ bgcolor: getMetricCardBg(muiTheme.palette.mode === 'dark'), textAlign: 'center', p: 1, border: '1px solid', borderColor: 'divider' }}>
                       <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>{t.temp}</Typography>
                       <Typography variant="h6" sx={{ fontWeight: 600 }}>
                         {airQuality?.current.weather.tp || '--'}°C
@@ -352,7 +370,7 @@ export function Home() {
                     </Card>
                   </Grid>
                   <Grid size={{ xs: 4 }}>
-                    <Card sx={{ bgcolor: getMetricCardBg(muiTheme.palette.mode === 'dark'), textAlign: 'center', p: 1 }}>
+                    <Card sx={{ bgcolor: getMetricCardBg(muiTheme.palette.mode === 'dark'), textAlign: 'center', p: 1, border: '1px solid', borderColor: 'divider' }}>
                       <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>{t.hum}</Typography>
                       <Typography variant="h6" sx={{ fontWeight: 600 }}>
                         {airQuality?.current.weather.hu || '--'}%
@@ -360,7 +378,7 @@ export function Home() {
                     </Card>
                   </Grid>
                   <Grid size={{ xs: 4 }}>
-                    <Card sx={{ bgcolor: getMetricCardBg(muiTheme.palette.mode === 'dark'), textAlign: 'center', p: 1 }}>
+                    <Card sx={{ bgcolor: getMetricCardBg(muiTheme.palette.mode === 'dark'), textAlign: 'center', p: 1, border: '1px solid', borderColor: 'divider' }}>
                       <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>{t.wind}</Typography>
                       <Typography variant="h6" sx={{ fontWeight: 600 }}>
                         {airQuality?.current.weather.ws || '--'} {t.ms}
@@ -589,7 +607,14 @@ export function Home() {
                           alignItems: 'center',
                           p: 1,
                           bgcolor: getMetricCardBg(muiTheme.palette.mode === 'dark'),
+                          border: '1px solid',
+                          borderColor: 'divider',
                           borderRadius: '8px',
+                          transition: 'all 0.2s ease',
+                          '&:hover': {
+                            borderColor: 'primary.main',
+                            transform: 'translateX(2px)',
+                          },
                         }}
                       >
                         <Typography variant="body2">{name}</Typography>
@@ -630,7 +655,14 @@ export function Home() {
                           alignItems: 'center',
                           p: 1,
                           bgcolor: getMetricCardBg(muiTheme.palette.mode === 'dark'),
+                          border: '1px solid',
+                          borderColor: 'divider',
                           borderRadius: '8px',
+                          transition: 'all 0.2s ease',
+                          '&:hover': {
+                            borderColor: 'primary.main',
+                            transform: 'translateX(2px)',
+                          },
                         }}
                       >
                         <Typography variant="body2">{name}</Typography>
@@ -701,7 +733,8 @@ export function Home() {
           borderTop: (theme) => `1px solid ${theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)'}`,
           py: 2,
           textAlign: 'center',
-          bgcolor: (theme) => theme.palette.mode === 'dark' ? '#0d1117' : '#f6f8fa',
+          bgcolor: getFooterBg(muiTheme.palette.mode === 'dark'),
+          backdropFilter: 'blur(8px)',
         }}
       >
         <Typography variant="body2" color="text.secondary">
