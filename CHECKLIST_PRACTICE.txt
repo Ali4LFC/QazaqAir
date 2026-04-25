@@ -1,0 +1,146 @@
+QazaqAir — Практическая проверка (логины/пароли/порты/шаги)
+Дата: 2026-04-25
+
+==================================================
+0) Запуск
+==================================================
+1. Основной стек:
+   docker-compose up -d --build
+
+2. Automation-стек (отдельно):
+   cd automation
+   docker-compose -f docker-compose-automation.yml up -d
+
+3. Проверка контейнеров:
+   docker ps
+
+==================================================
+1) Порты и сервисы (что открыть в браузере)
+==================================================
+- 80 / 443   -> Nginx (основной вход)
+- 8000       -> Backend API
+- 2222       -> SSH
+- 3000       -> Grafana
+- 3001       -> Frontend React
+- 5432       -> PostgreSQL
+- 5678       -> n8n
+- 8080       -> cAdvisor
+- 8085       -> Jenkins
+- 8082       -> Graphite
+- 8083       -> Nagios
+- 8086       -> Zabbix Web
+- 9000       -> Portainer
+- 9090       -> Prometheus
+- 9093       -> Alertmanager
+- 9100       -> Node Exporter
+- 9113       -> Nginx Exporter
+- 9115       -> Blackbox Exporter
+- 9187       -> PostgreSQL Exporter
+- 10051      -> Zabbix Server
+
+==================================================
+2) Логины / пароли (что есть в текущих файлах)
+==================================================
+ВАЖНО: это данные из текущих конфигов проекта.
+
+1. PostgreSQL (локальный контейнер db в compose):
+   - USER: user
+   - PASSWORD: password
+   - DB: airmonitor
+   Проверка:
+   docker exec -it qazaqair-db-1 psql -U user -d airmonitor -c "SELECT 1;"
+
+2. Grafana:
+   - URL: http://localhost:3000
+   - LOGIN: admin
+   - PASSWORD: admin
+   Проверка: вход в UI + наличие datasource/dashboards.
+
+3. Zabbix:
+   - URL: http://localhost:8086
+   - LOGIN: Admin
+   - PASSWORD: zabbix
+   Проверка: вход в UI.
+
+4. Nagios:
+   - URL: http://localhost:8083
+   - LOGIN: nagiosadmin
+   - PASSWORD: nagiosadmin
+   Проверка: вход в UI.
+
+5. SSH:
+   - Команда: ssh -p 2222 admin@localhost
+   - По документации: только SSH-ключ (без пароля)
+   Проверка: вход по ключу успешен, вход по паролю запрещён.
+
+6. Jenkins:
+   - URL: http://localhost:8085
+   - При первом входе может потребоваться initial admin password (из контейнера Jenkins)
+   Проверка:
+   docker exec -it qazaqair-jenkins-1 cat /var/jenkins_home/secrets/initialAdminPassword
+
+==================================================
+3) Что и как проверять (минимальный чек-лист на защиту)
+==================================================
+A. Сеть/доступность
+1. Проверить открытые порты:
+   PowerShell: Test-NetConnection localhost -Port 3000
+   (повторить для 8000, 9090, 5678, 8086, 8083, 8085)
+
+2. Проверить HTTP-эндпоинты:
+   - http://localhost:3001 (frontend)
+   - http://localhost:8000/docs (FastAPI)
+   - http://localhost:9090 (Prometheus)
+   - http://localhost:3000 (Grafana)
+
+B. БД
+1. Проверка подключения:
+   docker exec -it qazaqair-db-1 psql -U user -d airmonitor -c "SELECT NOW();"
+2. Проверка пользователей/ролей (если нужно):
+   docker exec -it qazaqair-db-1 psql -U user -d airmonitor -c "\du"
+
+C. Backup
+1. Запустить backup (вашим способом: через приложение/команду backup).
+2. Проверить появление файла в папке backups/.
+3. Восстановление (демо):
+   - создать test БД
+   - прогнать psql -f backup_file.sql
+   - показать что таблицы/данные восстановлены
+
+D. Безопасность
+1. SSH:
+   - ключевой вход работает
+   - парольный вход не работает
+2. pg_hba.conf:
+   - нет правила host all all 0.0.0.0/0 md5
+   - есть ограниченные правила/hostssl
+3. Fail2Ban:
+   - проверить наличие jail для ssh/nginx
+
+E. Наблюдаемость
+1. Prometheus Targets: все нужные target в состоянии UP.
+2. Grafana: дашборд открывается, метрики идут.
+3. Alertmanager: страница доступна, конфиг загружен.
+4. Node Exporter/Blackbox: метрики отдаются.
+
+F. IaC / Automation
+1. Terraform файлы присутствуют и валидны по структуре.
+2. Ansible playbooks присутствуют.
+3. Jenkinsfile присутствует, pipeline читается.
+
+==================================================
+4) Быстрый формат доклада преподавателю (1-2 минуты)
+==================================================
+- Поднял стек docker-compose.
+- Показал фронт, API docs, БД коннект.
+- Показал мониторинг: Prometheus + Grafana + (Zabbix/Nagios).
+- Показал backup и факт создания backup-файла.
+- Показал SSH hardening (без пароля, порт 2222).
+- Показал IaC артефакты: Terraform/Ansible/Jenkinsfile.
+
+==================================================
+5) Важное замечание
+==================================================
+Секреты в репозитории оставлены намеренно по вашему требованию.
+Если преподаватель строго смотрит security best practices,
+это может стать отдельным замечанием вне функциональной проверки

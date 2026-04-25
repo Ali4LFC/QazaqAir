@@ -246,7 +246,7 @@ services:
       context: ./monitoring/zabbix
       dockerfile: Dockerfile
     container_name: zabbix-setup
-    restart: "no"
+    restart: on-failure
     networks:
       - app-network
     depends_on:

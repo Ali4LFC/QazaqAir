@@ -1,4 +1,5 @@
 import os
+import shutil
 import subprocess
 from datetime import datetime
 from pathlib import Path
@@ -28,17 +29,29 @@ class BackupService:
             if u.password:
                 env["PGPASSWORD"] = unquote(u.password)
             
-            # Попытка найти pg_dump
-            pg_dump_cmd = "pg_dump"
-            possible_paths = [
-                r"C:\Program Files\PostgreSQL\18\bin\pg_dump.exe",
-                r"C:\Program Files\PostgreSQL\17\bin\pg_dump.exe",
-                r"C:\Program Files\PostgreSQL\16\bin\pg_dump.exe",
-            ]
-            for p in possible_paths:
-                if os.path.exists(p):
-                    pg_dump_cmd = p
-                    break
+            # Попытка найти pg_dump в PATH
+            pg_dump_cmd = shutil.which("pg_dump")
+            # Если в PATH не найден, проверяем типовые пути
+            if not pg_dump_cmd:
+                possible_paths = []
+                # Windows-пути
+                possible_paths.extend([
+                    r"C:\Program Files\PostgreSQL\18\bin\pg_dump.exe",
+                    r"C:\Program Files\PostgreSQL\17\bin\pg_dump.exe",
+                    r"C:\Program Files\PostgreSQL\16\bin\pg_dump.exe",
+                ])
+                # Linux-пути
+                possible_paths.extend([
+                    "/usr/bin/pg_dump",
+                    "/usr/local/bin/pg_dump",
+                ])
+                for p in possible_paths:
+                    if os.path.exists(p):
+                        pg_dump_cmd = p
+                        break
+            if not pg_dump_cmd:
+                print("[Backup] pg_dump not found in PATH or known locations.")
+                return None
 
             command = [
                 pg_dump_cmd,

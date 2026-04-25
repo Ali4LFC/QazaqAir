@@ -65,7 +65,7 @@
 ## 5. SSH (порт 2222, без пароля)
 - **Где**: `docker-compose.yml` (backend порты), `security/sshd_config`, `security/jail.local`
 - **Запуск**: Контейнер backend слушает порт 2222
-- **Подключение**: `ssh -p 2222 admin@localhost` (пароль: admin123)
+- **Подключение**: `ssh -p 2222 admin@localhost` (только по SSH-ключу)
 
 ## 6. Firewall (UFW)
 - **Где**: `security/ufw-rules.sh`
@@ -117,15 +117,15 @@
 
 ## 16. OPA, Jenkins, n8n
 - **OPA**: `automation/opa/policies/rbac.rego`
-- **Jenkins**: `automation/docker-compose-automation.yml` (порт 8090)
+- **Jenkins**: `docker-compose.yml` (порт 8085)
 - **n8n**: `docker-compose.yml` (порт 5678)
 - **Запуск**:
   - n8n: `docker-compose up -d n8n`
-  - Jenkins: `cd automation && docker-compose -f docker-compose-automation.yml up -d`
+  - Jenkins: `docker-compose up -d jenkins`
   - OPA: запускается как часть automation стека или вручную
 - **Доступ**:
   - n8n: http://localhost:5678
-  - Jenkins: http://localhost:8090
+  - Jenkins: http://localhost:8085
 
 ===================================
 БЫСТРЫЙ СТАРТ (все сервисы)
@@ -151,7 +151,7 @@ cd automation && docker-compose -f docker-compose-automation.yml up -d
 - 8082     - Graphite
 - 8083     - Nagios
 - 8086     - Zabbix Web
-- 8090     - Jenkins
+- 8085     - Jenkins
 - 9000     - Portainer
 - 9090     - Prometheus
 - 9093     - Alertmanager
