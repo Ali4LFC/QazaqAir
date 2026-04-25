@@ -2,3 +2,4 @@ docker
 pyTelegramBotAPI
 requests
 pandas
+openai

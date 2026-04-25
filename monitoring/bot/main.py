@@ -7,6 +7,7 @@ import time
 import pandas as pd
 from datetime import datetime, timedelta
 from io import BytesIO
+from openai import OpenAI
 
 # Configuration
 TOKEN = os.getenv('TELEGRAM_TOKEN')
@@ -17,9 +18,11 @@ ALERTMANAGER_URL = os.getenv('ALERTMANAGER_URL', 'http://alertmanager:9093')
 GRAFANA_URL = os.getenv('GRAFANA_URL', 'http://grafana:3000')
 GRAFANA_API_KEY = os.getenv('GRAFANA_API_KEY')
 DASHBOARD_UID = os.getenv('DASHBOARD_UID', 'node-exporter-full')
+OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 
 bot = telebot.TeleBot(TOKEN)
 client = docker.from_env()
+ai_client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
 
 def is_authorized(message):
     return message.from_user.id in ALLOWED_USER_IDS
@@ -59,9 +62,10 @@ def send_welcome(message):
         "📈 *Visuals:*\n"
         "/render [id] - Render specific Grafana panel\n"
         "/dashboard - Get core metrics graphs\n\n"
-        "🔍 *Analytics:*\n"
+        "🔍 *Analytics & AI:*\n"
         "/top_cpu - Top 5 CPU consumers\n"
         "/predict_disk - Disk exhaustion prediction\n"
+        "/ask [question] - Ask AI Assistant (OpenAI GPT)\n"
         "/uptime - Services & System uptime\n\n"
         "🛠️ *Operations:*\n"
         "/status - Container status\n"
@@ -180,6 +184,32 @@ def restart_command(message):
     except Exception as e:
         bot.reply_to(message, f"❌ Error: {e}")
 
+@bot.message_handler(commands=['ask'])
+def ask_ai_command(message):
+    if not is_authorized(message): return
+    if not ai_client:
+        bot.reply_to(message, "❌ OpenAI Assistant is not configured. Please set OPENAI_API_KEY in environment.")
+        return
+    
+    question = message.text.replace('/ask', '').strip()
+    if not question:
+        bot.reply_to(message, "⚠️ Please provide a question: /ask [your question]")
+        return
+
+    bot.send_chat_action(message.chat.id, 'typing')
+    try:
+        response = ai_client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": "You are a DevOps assistant for QazaqAir monitoring system. Help users with infrastructure, monitoring, and air quality data analysis. You have access to project metrics via other bot commands."},
+                {"role": "user", "content": question}
+            ]
+        )
+        answer = response.choices[0].message.content
+        bot.reply_to(message, f"🤖 *AI Assistant:* \n\n{answer}", parse_mode='Markdown')
+    except Exception as e:
+        bot.reply_to(message, f"❌ Error contacting AI: {e}")
+
 # --- Docker Event Listener ---
 def listen_docker_events():
     for event in client.events(decode=True):
@@ -201,6 +231,7 @@ if __name__ == "__main__":
             telebot.types.BotCommand("metrics", "Текущие метрики"),
             telebot.types.BotCommand("top_cpu", "Топ потребителей CPU"),
             telebot.types.BotCommand("predict_disk", "Прогноз заполнения диска"),
+            telebot.types.BotCommand("ask", "Спросить ИИ-ассистента"),
             telebot.types.BotCommand("logs", "Логи контейнера"),
             telebot.types.BotCommand("alerts", "Активные алерты"),
             telebot.types.BotCommand("uptime", "Аптайм системы"),
