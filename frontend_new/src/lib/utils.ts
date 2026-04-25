@@ -127,6 +127,13 @@ export const TRANSLATIONS = {
     changeCity: "Қаланы өзгерту",
     haveAccount: "Аккаунтыңыз бар ма?",
     noAccount: "Аккаунтыңыз жоқ па?",
+    assistantButton: "Ауа райы көмекшісі",
+    assistantTitle: "AI-көмекші",
+    assistantGreeting: "Сәлем! Мен ауа райы мен ауа сапасы бойынша көмекшімін. Температура, ылғалдылық, жел немесе AQI туралы сұраңыз.",
+    assistantThinking: "Көмекші ойлануда...",
+    assistantPlaceholder: "Ауа райы мен AQI туралы сұраңыз...",
+    assistantSend: "Жіберу",
+    assistantError: "Көмекшіден жауап алу мүмкін болмады. Қайта көріңіз.",
   },
   ru: {
     good: "Хорошо",
@@ -174,5 +181,12 @@ export const TRANSLATIONS = {
     changeCity: "Сменить город",
     haveAccount: "Уже есть аккаунт?",
     noAccount: "Нет аккаунта?",
+    assistantButton: "Помощник по погоде",
+    assistantTitle: "AI-помощник",
+    assistantGreeting: "Привет! Я помощник по погоде и качеству воздуха. Спроси про температуру, влажность, ветер или AQI в регионе.",
+    assistantThinking: "Помощник думает...",
+    assistantPlaceholder: "Спросите про погоду и AQI...",
+    assistantSend: "Отпр.",
+    assistantError: "Не удалось получить ответ помощника. Попробуйте еще раз.",
   }
 };

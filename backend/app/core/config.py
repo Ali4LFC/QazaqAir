@@ -30,6 +30,9 @@ class Settings:
     SSH_PASS: str = os.getenv("SSH_PASS", "admin123")
     
     SECRET_KEY: str = os.getenv("SECRET_KEY", "your-secret-key-change-in-production")
+    OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
+    OPENAI_API_BASE: str = os.getenv("OPENAI_API_BASE", "https://api.openai.com/v1")
+    AI_MODEL: str = os.getenv("AI_MODEL", "gpt-3.5-turbo")
     
     REGIONS = [
         {"key": "astana", "name": "Астана", "name_kk": "Астана", "city": "Astana", "coords": [51.1694, 71.4491], "aliases": ["Nur-Sultan"]},
@@ -51,7 +54,7 @@ class Settings:
         {"key": "turkistan", "name": "Туркестанская область", "name_kk": "Түркістан облысы", "city": "Turkistan", "coords": [43.3000, 68.2667], "aliases": []},
         {"key": "abay", "name": "Абайская область", "name_kk": "Абай облысы", "city": "Semey", "coords": [50.4333, 80.2667], "aliases": ["Semipalatinsk"]},
         {"key": "ulytau", "name": "Улытауская область", "name_kk": "Ұлытау облысы", "city": "Zhezkazgan", "coords": [47.7833, 67.7000], "aliases": ["Zhezqazghan"]},
-        {"key": "jetisu", "name": "Жетысуская область", "name_kk": "Жетісу облысы", "city": "Taldykorgan", "coords": [45.0167, 78.3667], "aliases": []},
+        {"key": "jetisu", "name": "Жетысуская область", "name_kk": "Жетісу облысы", "city": "Taldykorgan", "coords": [45.0167, 78.3667], "aliases": ["Жетісу", "Жетысу", "Jetisu", "Zhetisu"]},
     ]
 
 settings = Settings()

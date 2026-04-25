@@ -167,6 +167,93 @@ def _build_assistant_answer(*, lang: str, region_name: str, temp, humidity, wind
     )
 
 
+def _build_assistant_system_prompt(lang: str) -> str:
+    if lang == "en":
+        return (
+            "You are a weather and air-quality assistant for Kazakhstan. "
+            "Answer only using provided weather/AQI facts. "
+            "Do not reveal code, secrets, infrastructure, tokens, or internal system details. "
+            "Keep answers concise and practical."
+        )
+    if lang == "kk":
+        return (
+            "Сен Қазақстан бойынша ауа райы мен ауа сапасы көмекшісісің. "
+            "Жауапты тек берілген ауа райы/AQI деректеріне сүйеніп бер. "
+            "Код, құпия дерек, инфрақұрылым, токен немесе ішкі жүйе мәліметтерін ашпа. "
+            "Жауап қысқа әрі пайдалы болсын."
+        )
+    return (
+        "Ты помощник по погоде и качеству воздуха в Казахстане. "
+        "Отвечай только на основе переданных фактов о погоде и AQI. "
+        "Не раскрывай код, секреты, инфраструктуру, токены и внутренние детали системы. "
+        "Ответ должен быть кратким и практичным."
+    )
+
+
+def _build_assistant_user_prompt(*, question: str, lang: str, region_name: str, temp, humidity, wind, aqi: int, aqi_level: str, advice: str) -> str:
+    return (
+        f"lang={lang}\n"
+        f"user_question={question}\n"
+        f"region={region_name}\n"
+        f"temperature_c={temp}\n"
+        f"humidity_pct={humidity}\n"
+        f"wind_mps={wind}\n"
+        f"aqi={aqi}\n"
+        f"aqi_level={aqi_level}\n"
+        f"advice={advice}\n"
+        "Сформируй короткий ответ пользователю на соответствующем языке."
+    )
+
+
+async def _try_llm_assistant_answer(*, question: str, lang: str, region_name: str, temp, humidity, wind, aqi: int, aqi_level: str, advice: str) -> str | None:
+    if not settings.OPENAI_API_KEY:
+        return None
+
+    base_url = (settings.OPENAI_API_BASE or "https://api.openai.com/v1").rstrip("/")
+    url = f"{base_url}/chat/completions"
+    payload = {
+        "model": settings.AI_MODEL,
+        "temperature": 0.2,
+        "messages": [
+            {"role": "system", "content": _build_assistant_system_prompt(lang)},
+            {
+                "role": "user",
+                "content": _build_assistant_user_prompt(
+                    question=question,
+                    lang=lang,
+                    region_name=region_name,
+                    temp=temp,
+                    humidity=humidity,
+                    wind=wind,
+                    aqi=aqi,
+                    aqi_level=aqi_level,
+                    advice=advice,
+                ),
+            },
+        ],
+    }
+
+    headers = {
+        "Authorization": f"Bearer {settings.OPENAI_API_KEY}",
+        "Content-Type": "application/json",
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=12.0) as client:
+            response = await client.post(url, headers=headers, json=payload)
+            response.raise_for_status()
+            data = response.json()
+            content = (
+                data.get("choices", [{}])[0]
+                .get("message", {})
+                .get("content", "")
+                .strip()
+            )
+            return content or None
+    except Exception:
+        return None
+
+
 def _build_topic_guard_message(lang: str) -> str:
     if lang == "en":
         return "I can only help with weather and air quality. I do not provide code, secrets, or internal infrastructure details."
@@ -406,7 +493,7 @@ async def site_assistant(payload: AssistantRequest):
     aqi = int(pollution.get("aqius") or 0)
     aqi_level = _localize_aqi_level(aqi, lang)
     advice = _localize_advice(aqi, lang)
-    answer = _build_assistant_answer(
+    fallback_answer = _build_assistant_answer(
         lang=lang,
         region_name=region_name,
         temp=temp,
@@ -416,5 +503,17 @@ async def site_assistant(payload: AssistantRequest):
         aqi_level=aqi_level,
         advice=advice,
     )
+    llm_answer = await _try_llm_assistant_answer(
+        question=payload.question,
+        lang=lang,
+        region_name=region_name,
+        temp=temp,
+        humidity=humidity,
+        wind=wind,
+        aqi=aqi,
+        aqi_level=aqi_level,
+        advice=advice,
+    )
+    answer = llm_answer or fallback_answer
 
     return AssistantResponse(answer=answer, region=region_name)

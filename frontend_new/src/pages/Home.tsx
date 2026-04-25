@@ -127,6 +127,12 @@ const getSidebarBg = (isDark: boolean) => isDark ? '#0d1117' : '#ffffff';
 // Адаптивный оверлей
 const getOverlayBg = (isDark: boolean) => isDark ? 'rgba(0,0,0,0.5)' : 'rgba(0,0,0,0.3)';
 
+const getAssistantGreeting = (lang: Language) => (
+  lang === 'kk'
+    ? 'Сәлем! Мен ауа райы мен ауа сапасы бойынша көмекшімін. Температура, ылғалдылық, жел немесе AQI туралы сұраңыз.'
+    : 'Привет! Я помощник по погоде и качеству воздуха. Спроси про температуру, влажность, ветер или AQI в регионе.'
+);
+
 export function Home() {
   const { user, isAuthenticated } = useAuth();
   const { toggleTheme } = useThemeContext();
@@ -143,7 +149,7 @@ export function Home() {
   const [assistantOpen, setAssistantOpen] = useState(false);
   const [assistantQuestion, setAssistantQuestion] = useState('');
   const [assistantMessages, setAssistantMessages] = useState<Array<{ role: 'user' | 'assistant'; text: string }>>([
-    { role: 'assistant', text: 'Привет! Я помощник по погоде и качеству воздуха. Спроси про температуру, влажность, ветер или AQI в регионе.' },
+    { role: 'assistant', text: getAssistantGreeting(lang) },
   ]);
   const [assistantLoading, setAssistantLoading] = useState(false);
   const [assistantError, setAssistantError] = useState('');
@@ -153,6 +159,25 @@ export function Home() {
   const [kazakhstanGeo, setKazakhstanGeo] = useState<any>(null);
 
   const t = TRANSLATIONS[lang];
+
+  useEffect(() => {
+    const nextGreeting = getAssistantGreeting(lang);
+    setAssistantMessages((prev) => {
+      if (prev.length === 0) {
+        return [{ role: 'assistant', text: nextGreeting }];
+      }
+
+      const first = prev[0];
+      const knownGreetings = [getAssistantGreeting('ru'), getAssistantGreeting('kk')];
+      if (first.role === 'assistant' && knownGreetings.includes(first.text)) {
+        const next = [...prev];
+        next[0] = { role: 'assistant', text: nextGreeting };
+        return next;
+      }
+
+      return prev;
+    });
+  }, [lang]);
 
   // Sync selectedRegion with user's city_key when it changes
   useEffect(() => {
@@ -251,11 +276,11 @@ export function Home() {
       const response = await assistantApi.ask(question, selectedRegion);
       setAssistantMessages((prev) => [...prev, { role: 'assistant', text: response.answer }]);
     } catch (e) {
-      setAssistantError('Не удалось получить ответ помощника. Попробуйте еще раз.');
+      setAssistantError(t.assistantError);
     } finally {
       setAssistantLoading(false);
     }
-  }, [assistantQuestion, assistantLoading, selectedRegion]);
+  }, [assistantQuestion, assistantLoading, selectedRegion, t.assistantError]);
 
   const toggleLang = () => {
     const newLang = lang === 'ru' ? 'kk' : 'ru';
@@ -916,12 +941,12 @@ export function Home() {
       >
         {!assistantOpen ? (
           <Button variant="contained" onClick={() => setAssistantOpen(true)} sx={{ borderRadius: '999px' }}>
-            Помощник по погоде
+            {t.assistantButton}
           </Button>
         ) : (
           <Card sx={{ ...getGlassCardSx(muiTheme.palette.mode === 'dark'), p: 1.5 }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', px: 1, pb: 1 }}>
-              <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>AI-помощник</Typography>
+              <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>{t.assistantTitle}</Typography>
               <IconButton size="small" onClick={() => setAssistantOpen(false)}>
                 <CloseIcon fontSize="small" />
               </IconButton>
@@ -943,7 +968,7 @@ export function Home() {
                   <Typography variant="body2">{msg.text}</Typography>
                 </Box>
               ))}
-              {assistantLoading && <Typography variant="caption" color="text.secondary">Помощник думает...</Typography>}
+              {assistantLoading && <Typography variant="caption" color="text.secondary">{t.assistantThinking}</Typography>}
             </Box>
             {assistantError && (
               <Typography variant="caption" color="error" sx={{ px: 1, pb: 1, display: 'block' }}>
@@ -962,11 +987,11 @@ export function Home() {
                 }}
                 fullWidth
                 size="small"
-                placeholder="Спросите про погоду и AQI..."
+                placeholder={t.assistantPlaceholder}
                 disabled={assistantLoading}
               />
               <Button variant="contained" onClick={handleAssistantAsk} disabled={assistantLoading || !assistantQuestion.trim()}>
-                Отпр.
+                {t.assistantSend}
               </Button>
             </Box>
           </Card>
