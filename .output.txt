@@ -1,0 +1,260 @@
+diff --git a/backend/app/api/endpoints/air_quality.py b/backend/app/api/endpoints/air_quality.py
+index f636746..38c261d 100644
+--- a/backend/app/api/endpoints/air_quality.py
++++ b/backend/app/api/endpoints/air_quality.py
+@@ -1,4 +1,5 @@
+ import asyncio
++import difflib
+ import re
+ from fastapi import APIRouter, HTTPException, Query
+ from pydantic import BaseModel, Field
+@@ -29,12 +30,76 @@ BLOCKED_TOPICS = [
+     "ключ", "api key", "docker", "compose", "sql", "ssh", "конфиг", "config", "env",
+ ]
+
++LANG_PATTERNS = {
++    "ru": ["какая", "погода", "влажность", "ветер", "воздух", "алер", "покажи"],
++    "kk": ["қандай", "ауа райы", "ылғал", "жел", "ауа", "көрсет", "ластану"],
++    "en": ["weather", "humidity", "wind", "air", "aqi", "show", "alerts"],
++}
++
++
++def _normalize_text(value: str) -> str:
++    normalized = (value or "").strip().lower().replace("ё", "е")
++    normalized = re.sub(r"[^\w\s-]", " ", normalized, flags=re.UNICODE)
++    normalized = re.sub(r"\s+", " ", normalized).strip()
++    return normalized
++
++
++def _detect_language(question: str) -> str:
++    q = _normalize_text(question)
++    if not q:
++        return "ru"
++
++    scores = {"ru": 0, "kk": 0, "en": 0}
++    for lang, markers in LANG_PATTERNS.items():
++        for marker in markers:
++            if marker in q:
++                scores[lang] += 1
++
++    if re.search(r"[a-z]", q):
++        scores["en"] += 1
++
++    if re.search(r"[әіңғүұқөһ]", q):
++        scores["kk"] += 2
++
++    return max(scores, key=scores.get)
++
++
++def _best_fuzzy_match(question: str, candidates: list[str]) -> str | None:
++    if not candidates:
++        return None
++
++    q = _normalize_text(question)
++    if not q:
++        return None
++
++    words = q.split()
++    ngrams = set(words)
++    for i in range(len(words) - 1):
++        ngrams.add(f"{words[i]} {words[i + 1]}")
++
++    best = None
++    best_score = 0.0
++    for candidate in candidates:
++        c = _normalize_text(candidate)
++        if not c:
++            continue
++        local_scores = [difflib.SequenceMatcher(None, c, token).ratio() for token in ngrams]
++        local_scores.append(difflib.SequenceMatcher(None, c, q).ratio())
++        score = max(local_scores)
++        if score > best_score:
++            best = candidate
++            best_score = score
++
++    return best if best_score >= 0.78 else None
++
+
+ def _extract_region_from_question(question: str):
+-    normalized_question = question.strip().lower()
++    normalized_question = _normalize_text(question)
+     if not normalized_question:
+         return None
+
++    all_candidates: list[tuple[str, dict]] = []
++
+     for region in settings.REGIONS:
+         candidates = [
+             region.get("key"),
+@@ -47,15 +112,121 @@ def _extract_region_from_question(question: str):
+         for candidate in candidates:
+             if not candidate:
+                 continue
+-            needle = str(candidate).strip().lower()
++            needle = _normalize_text(str(candidate))
+             if not needle:
+                 continue
++            all_candidates.append((str(candidate), region))
+             if re.search(rf"(?<!\w){re.escape(needle)}(?!\w)", normalized_question):
+                 return region
+
++    fuzzy = _best_fuzzy_match(normalized_question, [c[0] for c in all_candidates])
++    if fuzzy:
++        for candidate, region in all_candidates:
++            if candidate == fuzzy:
++                return region
++
+     return None
+
+
++def _is_weather_context(question: str, lang: str) -> bool:
++    q = _normalize_text(question)
++    if len(q) < 3:
++        return False
++
++    weather_markers = {
++        "ru": ["погод", "температур", "влаж", "ветер", "aqi", "воздух", "смог", "загряз"],
++        "kk": ["ауа рай", "температура", "ылғал", "жел", "aqi", "ауа", "түтін", "ластан"],
++        "en": ["weather", "temperature", "humidity", "wind", "aqi", "air", "pollution", "smog"],
++    }
++    markers = weather_markers.get(lang, weather_markers["ru"])
++    if any(marker in q for marker in markers):
++        return True
++
++    conversational = {
++        "ru": ["как там", "что по", "ну и", "а сейчас", "сегодня", "завтра"],
++        "kk": ["қалай", "қазір", "бүгін", "ертең"],
++        "en": ["how is", "what about", "now", "today", "tomorrow"],
++    }
++    return any(marker in q for marker in conversational.get(lang, []))
++
++
++def _build_assistant_answer(*, lang: str, region_name: str, temp, humidity, wind, aqi: int, aqi_level: str, advice: str) -> str:
++    if lang == "en":
++        return (
++            f"Region: {region_name}. Current conditions: temperature {temp}°C, humidity {humidity}%, wind {wind} m/s. "
++            f"Air Quality Index AQI: {aqi} ({aqi_level}). {advice}"
++        )
++    if lang == "kk":
++        return (
++            f"Өңір: {region_name}. Қазір: температура {temp}°C, ылғалдылық {humidity}%, жел {wind} м/с. "
++            f"Ауа сапасы индексі AQI: {aqi} ({aqi_level}). {advice}"
++        )
++    return (
++        f"Регион: {region_name}. Сейчас: температура {temp}°C, влажность {humidity}%, ветер {wind} м/с. "
++        f"Индекс качества воздуха AQI: {aqi} ({aqi_level}). {advice}"
++    )
++
++
++def _build_topic_guard_message(lang: str) -> str:
++    if lang == "en":
++        return "I can only help with weather and air quality. I do not provide code, secrets, or internal infrastructure details."
++    if lang == "kk":
++        return "Мен тек ауа райы мен ауа сапасы туралы көмектесемін. Код, құпия деректер және ішкі инфрақұрылым туралы айтпаймын."
++    return "Я помогаю только по погоде и качеству воздуха. По коду, секретам и внутренней инфраструктуре не консультирую."
++
++
++def _localize_aqi_level(aqi: int, lang: str) -> str:
++    levels = {
++        "ru": ["Хорошее", "Умеренное", "Вредно для чувствительных групп", "Вредное", "Очень вредное", "Опасное"],
++        "kk": ["Жақсы", "Орташа", "Сезімтал топтарға зиян", "Зиянды", "Өте зиянды", "Қауіпті"],
++        "en": ["Good", "Moderate", "Unhealthy for sensitive groups", "Unhealthy", "Very unhealthy", "Hazardous"],
++    }
++    bounds = [50, 100, 150, 200, 300]
++    idx = 5
++    for i, bound in enumerate(bounds):
++        if aqi <= bound:
++            idx = i
++            break
++    return levels.get(lang, levels["ru"])[idx]
++
++
++def _localize_advice(aqi: int, lang: str) -> str:
++    advice = {
++        "ru": [
++            "Можно проводить время на улице без ограничений.",
++            "Для большинства людей воздух приемлем, но чувствительным группам лучше сократить длительные нагрузки.",
++            "Детям, пожилым и людям с заболеваниями дыхательных путей лучше сократить время на улице.",
++            "Рекомендуется ограничить активность на открытом воздухе и по возможности использовать маску.",
++            "Лучше минимизировать пребывание на улице, держать окна закрытыми и использовать очиститель воздуха.",
++        ],
++        "kk": [
++            "Сыртта шектеусіз жүруге болады.",
++            "Көпшілік үшін ауа қалыпты, бірақ сезімтал топтарға ұзақ жүктемені азайтқан дұрыс.",
++            "Балаларға, қарттарға және тыныс жолы аурулары бар адамдарға сыртта аз уақыт болған жөн.",
++            "Ашық ауадағы белсенділікті шектеп, мүмкін болса маска қолдану ұсынылады.",
++            "Сыртта болуды барынша азайтып, терезені жауып, ауа тазартқыш қолданған дұрыс.",
++        ],
++        "en": [
++            "You can stay outdoors without restrictions.",
++            "Air is acceptable for most people, but sensitive groups should reduce prolonged exertion.",
++            "Children, older adults, and people with respiratory conditions should limit outdoor time.",
++            "Limit outdoor activity and consider using a mask.",
++            "Minimize outdoor exposure, keep windows closed, and use an air purifier if possible.",
++        ],
++    }
++    if aqi <= 50:
++        idx = 0
++    elif aqi <= 100:
++        idx = 1
++    elif aqi <= 150:
++        idx = 2
++    elif aqi <= 200:
++        idx = 3
++    else:
++        idx = 4
++    return advice.get(lang, advice["ru"])[idx]
++
++
+ def _aqi_level_text(aqi: int) -> str:
+     if aqi <= 50:
+         return "Хорошее"
+@@ -182,13 +353,22 @@ async def db_status():
+
+ @router.post("/assistant", response_model=AssistantResponse)
+ async def site_assistant(payload: AssistantRequest):
+-    q = payload.question.strip().lower()
++    q = _normalize_text(payload.question)
++    lang = _detect_language(payload.question)
+     if any(topic in q for topic in BLOCKED_TOPICS):
+         return AssistantResponse(
+-            answer="Я помогаю только по погоде и качеству воздуха. По коду, секретам и внутренней инфраструктуре не консультирую.",
++            answer=_build_topic_guard_message(lang),
+             region="n/a",
+         )
+
++    if not _is_weather_context(payload.question, lang):
++        fallback = {
++            "ru": "Я могу помочь с погодой и качеством воздуха. Например: 'погода в Алматы' или 'какой сейчас AQI в Шымкенте?'.",
++            "kk": "Мен ауа райы мен ауа сапасы бойынша көмектесе аламын. Мысалы: 'Алматыдағы ауа райы' немесе 'Шымкенттегі AQI қандай?'.",
++            "en": "I can help with weather and air quality. For example: 'weather in Almaty' or 'what is AQI in Shymkent now?'.",
++        }
++        return AssistantResponse(answer=fallback.get(lang, fallback["ru"]), region="n/a")
++
+     region_name = settings.CITY
+     try:
+         region_from_question = _extract_region_from_question(payload.question)
+@@ -224,12 +404,17 @@ async def site_assistant(payload: AssistantRequest):
+     humidity = weather.get("hu")
+     wind = weather.get("ws")
+     aqi = int(pollution.get("aqius") or 0)
+-    aqi_level = _aqi_level_text(aqi)
+-    advice = _safety_advice(aqi)
+-
+-    answer = (
+-        f"Регион: {region_name}. Сейчас: температура {temp}°C, влажность {humidity}%, ветер {wind} м/с. "
+-        f"Индекс качества воздуха AQI: {aqi} ({aqi_level}). {advice}"
++    aqi_level = _localize_aqi_level(aqi, lang)
++    advice = _localize_advice(aqi, lang)
++    answer = _build_assistant_answer(
++        lang=lang,
++        region_name=region_name,
++        temp=temp,
++        humidity=humidity,
++        wind=wind,
++        aqi=aqi,
++        aqi_level=aqi_level,
++        advice=advice,
+     )
+
+     return AssistantResponse(answer=answer, region=region_name)
