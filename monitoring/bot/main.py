@@ -19,10 +19,15 @@ GRAFANA_URL = os.getenv('GRAFANA_URL', 'http://grafana:3000')
 GRAFANA_API_KEY = os.getenv('GRAFANA_API_KEY')
 DASHBOARD_UID = os.getenv('DASHBOARD_UID', 'node-exporter-full')
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
+OPENAI_API_BASE = os.getenv('OPENAI_API_BASE', 'https://api.openai.com/v1')
+AI_MODEL = os.getenv('AI_MODEL', 'gpt-3.5-turbo')
 
 bot = telebot.TeleBot(TOKEN)
 client = docker.from_env()
-ai_client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
+ai_client = OpenAI(
+    api_key=OPENAI_API_KEY,
+    base_url=OPENAI_API_BASE
+) if OPENAI_API_KEY else None
 
 def is_authorized(message):
     return message.from_user.id in ALLOWED_USER_IDS
@@ -199,11 +204,15 @@ def ask_ai_command(message):
     bot.send_chat_action(message.chat.id, 'typing')
     try:
         response = ai_client.chat.completions.create(
-            model="gpt-3.5-turbo",
+            model=AI_MODEL,
             messages=[
                 {"role": "system", "content": "You are a DevOps assistant for QazaqAir monitoring system. Help users with infrastructure, monitoring, and air quality data analysis. You have access to project metrics via other bot commands."},
                 {"role": "user", "content": question}
-            ]
+            ],
+            extra_headers={
+                "HTTP-Referer": "https://github.com/Ali4LFC/QazaqAir", # Optional, for OpenRouter rankings
+                "X-Title": "QazaqAir Monitoring Bot", # Optional, for OpenRouter rankings
+            }
         )
         answer = response.choices[0].message.content
         bot.reply_to(message, f"🤖 *AI Assistant:* \n\n{answer}", parse_mode='Markdown')
