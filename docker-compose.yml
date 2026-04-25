@@ -333,15 +333,15 @@ services:
           cpus: '0.25'
 
   grafana:
-    image: grafana/grafana:latest
+    image: grafana/grafana:12.4.0
     container_name: qazaqair-grafana-1
     restart: always
     user: "root"
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=admin
       - GF_USERS_ALLOW_SIGN_UP=false
-      - GF_RENDERING_ENABLED=false
-      - GF_IMAGE_RENDERER_PLUGIN_ENABLED=false
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
       - GF_PLUGINS_ENABLE_ALPHA=false
       - GF_FEATURE_TOGGLES_ENABLE=publicDashboards
     ports:
@@ -360,26 +360,6 @@ services:
         reservations:
           memory: 128M
           cpus: '0.1'
-
-  renderer:
-    image: grafana/grafana-image-renderer:latest
-    container_name: grafana-renderer
-    restart: always
-    ports:
-      - "8081:8081"
-    networks:
-      - app-network
-    environment:
-      - ENABLE_METRICS=true
-      - IGNORE_HTTPS_ERRORS=true
-    deploy:
-      resources:
-        limits:
-          memory: 512M
-          cpus: '0.5'
-        reservations:
-          memory: 256M
-          cpus: '0.25'
 
   node-exporter:
     image: prom/node-exporter:latest

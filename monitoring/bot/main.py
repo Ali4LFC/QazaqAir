@@ -4,7 +4,6 @@ import requests
 import os
 import time
 from datetime import datetime, timedelta
-from io import BytesIO
 from openai import OpenAI
 
 # Configuration
@@ -13,13 +12,18 @@ CHAT_ID = os.getenv('CHAT_ID')
 ALLOWED_USER_IDS = [int(i.strip()) for i in os.getenv('ALLOWED_USER_IDS', '').split(',') if i.strip()]
 PROMETHEUS_URL = os.getenv('PROMETHEUS_URL', 'http://prometheus:9090')
 ALERTMANAGER_URL = os.getenv('ALERTMANAGER_URL', 'http://alertmanager:9093')
-GRAFANA_URL = os.getenv('GRAFANA_URL', 'http://grafana:3000')
-GRAFANA_API_KEY = os.getenv('GRAFANA_API_KEY')
-DASHBOARD_UID = os.getenv('DASHBOARD_UID', 'node-exporter-full')
 COMPOSE_PROJECT_NAME = os.getenv('COMPOSE_PROJECT_NAME', 'qazaqair')
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 OPENAI_API_BASE = os.getenv('OPENAI_API_BASE', 'https://api.openai.com/v1')
 AI_MODEL = os.getenv('AI_MODEL', 'gpt-3.5-turbo')
+
+
+def _clean_env_value(value, default=""):
+    if value is None:
+        return default
+    # docker env_file may keep inline comments as part of value
+    return value.split('#', 1)[0].strip()
+
 
 bot = telebot.TeleBot(TOKEN)
 client = docker.from_env()
@@ -28,17 +32,22 @@ ai_client = OpenAI(
     base_url=OPENAI_API_BASE
 ) if OPENAI_API_KEY else None
 
-CORE_PANELS = {
-    "cpu": 7,
-    "ram": 156,
-    "disk": 16,
-    "containers": 13,
-}
-
 METRIC_QUERIES = {
     "cpu_usage": '100 - (avg(rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)',
     "memory_usage": '(1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100',
     "disk_usage": '(1 - (node_filesystem_avail_bytes{mountpoint="/",fstype!~"tmpfs|overlay"} / node_filesystem_size_bytes{mountpoint="/",fstype!~"tmpfs|overlay"})) * 100',
+}
+
+EXPORTER_QUERIES = {
+    "node_up": 'up{job="node-exporter"}',
+    "node_load_1m": 'node_load1',
+    "node_uptime": 'node_time_seconds - node_boot_time_seconds',
+    "nginx_up": 'up{job="nginx"}',
+    "nginx_connections_active": 'nginx_connections_active',
+    "nginx_http_requests_rate": 'sum(rate(nginx_http_requests_total[5m]))',
+    "postgres_up": 'up{job="postgres-exporter"}',
+    "postgres_connections": 'sum(pg_stat_database_numbackends)',
+    "postgres_db_size": 'sum(pg_database_size_bytes)',
 }
 
 def is_authorized(message):
@@ -52,15 +61,7 @@ def build_main_menu():
         telebot.types.InlineKeyboardButton("🚨 Активные алерты", callback_data="menu_alerts"),
     )
     kb.add(
-        telebot.types.InlineKeyboardButton("🖥️ CPU график", callback_data="panel_cpu"),
-        telebot.types.InlineKeyboardButton("🧠 RAM график", callback_data="panel_ram"),
-    )
-    kb.add(
-        telebot.types.InlineKeyboardButton("💽 Disk график", callback_data="panel_disk"),
-        telebot.types.InlineKeyboardButton("📦 Контейнеры график", callback_data="panel_containers"),
-    )
-    kb.add(
-        telebot.types.InlineKeyboardButton("📈 Все ключевые графики", callback_data="menu_dashboard"),
+        telebot.types.InlineKeyboardButton("🧩 Экспортеры", callback_data="menu_exporters"),
         telebot.types.InlineKeyboardButton("🔌 Состояние контейнеров", callback_data="menu_status"),
     )
     return kb
@@ -117,42 +118,55 @@ def get_active_alerts():
         return None
 
 
-def send_core_dashboard(chat_id):
-    bot.send_message(chat_id, "⌛ Рендерю ключевые графики Grafana (CPU/RAM/Disk/Containers)...")
-    media = []
-    captions = {
-        "cpu": "🖥️ CPU usage (30m)",
-        "ram": "🧠 RAM usage (30m)",
-        "disk": "💽 Disk usage (30m)",
-        "containers": "📦 Containers / network (30m)",
-    }
-    for key, panel_id in CORE_PANELS.items():
-        img = render_grafana_panel(panel_id)
-        if img:
-            media.append(telebot.types.InputMediaPhoto(img, caption=captions.get(key, key)))
+def format_exporters_report():
+    values = {k: get_prometheus_metric(v) for k, v in EXPORTER_QUERIES.items()}
 
-    if len(media) >= 2:
-        bot.send_media_group(chat_id, media)
-    elif len(media) == 1:
-        bot.send_photo(chat_id, media[0].media, caption=media[0].caption)
-    else:
-        bot.send_message(chat_id, "❌ Не удалось получить графики. Проверь `GRAFANA_API_KEY`, `DASHBOARD_UID` и renderer в Grafana.")
+    def up_icon(raw):
+        try:
+            return "✅" if float(raw) >= 1 else "❌"
+        except Exception:
+            return "❓"
 
-def render_grafana_panel(panel_id, from_time="now-30m", to_time="now"):
-    headers = {}
-    if GRAFANA_API_KEY:
-        headers['Authorization'] = f'Bearer {GRAFANA_API_KEY}'
-    # Typical render URL for Grafana (using UID only)
-    url = f"{GRAFANA_URL}/render/d-solo/{DASHBOARD_UID}?panelId={panel_id}&from={from_time}&to={to_time}&width=1000&height=500"
+    def as_number(raw, precision=2):
+        if raw in (None, "N/A"):
+            return "N/A"
+        try:
+            return f"{float(raw):.{precision}f}"
+        except Exception:
+            return str(raw)
+
+    uptime = "N/A"
+    raw_uptime = values.get("node_uptime")
     try:
-        response = requests.get(url, headers=headers, timeout=30)
-        response.raise_for_status()
-        return BytesIO(response.content)
-    except Exception as e:
-        print(f"Error rendering Grafana panel {panel_id}: {e}")
-        if hasattr(e, 'response') and e.response is not None:
-            print(f"Grafana response [{e.response.status_code}]: {e.response.text[:300]}")
-        return None
+        uptime = str(timedelta(seconds=int(float(raw_uptime))))
+    except Exception:
+        pass
+
+    db_size_gb = "N/A"
+    raw_db_size = values.get("postgres_db_size")
+    try:
+        db_size_gb = f"{(float(raw_db_size) / (1024 ** 3)):.2f} GB"
+    except Exception:
+        if raw_db_size not in (None, "N/A"):
+            db_size_gb = str(raw_db_size)
+
+    text = (
+        "🧩 *Отчет по экспортерам*\n\n"
+        "*Node Exporter*\n"
+        f"{up_icon(values.get('node_up'))} UP: `{values.get('node_up', 'N/A')}`\n"
+        f"📈 Load (1m): `{as_number(values.get('node_load_1m'))}`\n"
+        f"⏱️ Uptime: `{uptime}`\n\n"
+        "*Nginx Exporter*\n"
+        f"{up_icon(values.get('nginx_up'))} UP: `{values.get('nginx_up', 'N/A')}`\n"
+        f"🔗 Active connections: `{as_number(values.get('nginx_connections_active'), 0)}`\n"
+        f"🌐 HTTP req/s (5m): `{as_number(values.get('nginx_http_requests_rate'))}`\n\n"
+        "*Postgres Exporter*\n"
+        f"{up_icon(values.get('postgres_up'))} UP: `{values.get('postgres_up', 'N/A')}`\n"
+        f"🧵 Active DB connections: `{as_number(values.get('postgres_connections'), 0)}`\n"
+        f"💾 Total DB size: `{db_size_gb}`\n\n"
+        f"🕒 Updated: `{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}`"
+    )
+    return text
 
 
 def get_project_containers():
@@ -197,9 +211,10 @@ def send_welcome(message):
     if not is_authorized(message): return
     help_text = (
         "🤖 *Advanced Monitoring Bot*\n\n"
-        "📈 *Visuals:*\n"
-        "/render [id] - Render specific Grafana panel\n"
-        "/dashboard - Get core metrics graphs\n\n"
+        "🧩 *Exporters & Metrics:*\n"
+        "/exporters - Node/Nginx/Postgres exporters report\n"
+        "/metrics - Current CPU/RAM/Disk metrics\n"
+        "/alerts - Active alerts\n\n"
         "🔍 *Analytics & AI:*\n"
         "/top_cpu - Top 5 CPU consumers\n"
         "/predict_disk - Disk exhaustion prediction\n"
@@ -209,8 +224,6 @@ def send_welcome(message):
         "/status - Container status\n"
         "/logs [service] - Last 20 log lines\n"
         "/restart [service] - Restart container\n"
-        "/alerts - Active alerts\n"
-        "/metrics - Current CPU/RAM/Disk metrics\n"
         "/menu - Open interactive monitoring menu\n"
     )
     bot.reply_to(message, help_text, parse_mode='Markdown', reply_markup=build_main_menu())
@@ -221,25 +234,10 @@ def menu_command(message):
     if not is_authorized(message): return
     bot.send_message(message.chat.id, "Выбери, что проверить 👇", reply_markup=build_main_menu())
 
-@bot.message_handler(commands=['render'])
-def render_command(message):
+@bot.message_handler(commands=['exporters'])
+def exporters_command(message):
     if not is_authorized(message): return
-    args = message.text.split()
-    if len(args) < 2:
-        bot.reply_to(message, "⚠️ Usage: /render [panel_id]")
-        return
-    panel_id = args[1]
-    bot.send_chat_action(message.chat.id, 'upload_photo')
-    image = render_grafana_panel(panel_id)
-    if image:
-        bot.send_photo(message.chat.id, image, caption=f"📊 Panel {panel_id}")
-    else:
-        bot.reply_to(message, "❌ Failed to render panel. Check GRAFANA_API_KEY and Renderer status.")
-
-@bot.message_handler(commands=['dashboard'])
-def dashboard_command(message):
-    if not is_authorized(message): return
-    send_core_dashboard(message.chat.id)
+    bot.reply_to(message, format_exporters_report(), parse_mode='Markdown')
 
 
 @bot.message_handler(commands=['metrics'])
@@ -347,7 +345,7 @@ def restart_command(message):
         bot.reply_to(message, f"❌ Error: {e}")
 
 
-@bot.callback_query_handler(func=lambda call: call.data.startswith('menu_') or call.data.startswith('panel_'))
+@bot.callback_query_handler(func=lambda call: call.data.startswith('menu_'))
 def callbacks(call):
     message = call.message
     if not message:
@@ -385,23 +383,11 @@ def callbacks(call):
             if len(active_alerts) > 10:
                 lines.append(f"\n…and {len(active_alerts) - 10} more")
             bot.send_message(message.chat.id, "\n".join(lines), parse_mode='Markdown')
-    elif data == 'menu_dashboard':
-        send_core_dashboard(message.chat.id)
+    elif data == 'menu_exporters':
+        bot.send_message(message.chat.id, format_exporters_report(), parse_mode='Markdown')
     elif data == 'menu_status':
         report = format_container_status_report()
         bot.send_message(message.chat.id, report, parse_mode='Markdown')
-    elif data.startswith('panel_'):
-        panel_key = data.replace('panel_', '')
-        panel_id = CORE_PANELS.get(panel_key)
-        if panel_id is None:
-            bot.send_message(message.chat.id, "⚠️ Неизвестная панель")
-            return
-        bot.send_chat_action(message.chat.id, 'upload_photo')
-        image = render_grafana_panel(panel_id)
-        if image:
-            bot.send_photo(message.chat.id, image, caption=f"📊 {panel_key.upper()} panel")
-        else:
-            bot.send_message(message.chat.id, "❌ Не удалось получить график из Grafana.")
 
 @bot.message_handler(commands=['ask'])
 def ask_ai_command(message):
@@ -443,7 +429,7 @@ if __name__ == "__main__":
         
         bot.set_my_commands([
             telebot.types.BotCommand("menu", "Всплывающее меню мониторинга"),
-            telebot.types.BotCommand("dashboard", "Основные графики (CPU/RAM/Disk)"),
+            telebot.types.BotCommand("exporters", "Отчет по экспортерам"),
             telebot.types.BotCommand("status", "Состояние контейнеров"),
             telebot.types.BotCommand("metrics", "Текущие метрики"),
             telebot.types.BotCommand("top_cpu", "Топ потребителей CPU"),
