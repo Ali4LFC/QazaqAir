@@ -38,6 +38,7 @@ services:
     volumes:
       - ./backend:/app/backend
       - ./backend/certs:/app/backend/certs
+      - ./backups:/app/backups
     networks:
       - app-network
     deploy:

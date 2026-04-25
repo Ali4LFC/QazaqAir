@@ -10,17 +10,23 @@ class SSHServer(asyncssh.SSHServer):
     def validate_password(self, username, password):
         return username == settings.SSH_USER and password == settings.SSH_PASS
 
-def handle_client(process):
+async def handle_client(process):
     process.stdout.write('Welcome to QazaqAir SSH Management Console!\n')
     process.stdout.write('Available commands: status, backup, exit\n')
     
     while True:
         process.stdout.write('qazaqair> ')
         try:
-            line = process.stdin.readline().strip()
+            line = await process.stdin.readline()
         except EOFError:
             break
+        except Exception:
+            break
             
+        if not line:
+            break
+
+        line = line.strip()
         if not line:
             continue
             
