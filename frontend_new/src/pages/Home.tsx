@@ -32,7 +32,7 @@ import LightModeIcon from '@mui/icons-material/LightMode';
 import InfoIcon from '@mui/icons-material/Info';
 import CompareArrowsIcon from '@mui/icons-material/CompareArrows';
 import CloseIcon from '@mui/icons-material/Close';
-import { airQualityApi } from '@/api/client';
+import { airQualityApi, assistantApi } from '@/api/client';
 import { useAuth } from '@/context/AuthContext';
 import { useThemeContext } from '@/main';
 import { getAQIInfo, getAQIText, TRANSLATIONS, REGIONS } from '@/lib/utils';
@@ -140,6 +140,13 @@ export function Home() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [showAQIModal, setShowAQIModal] = useState(false);
+  const [assistantOpen, setAssistantOpen] = useState(false);
+  const [assistantQuestion, setAssistantQuestion] = useState('');
+  const [assistantMessages, setAssistantMessages] = useState<Array<{ role: 'user' | 'assistant'; text: string }>>([
+    { role: 'assistant', text: 'Привет! Я помощник по погоде и качеству воздуха. Спроси про температуру, влажность, ветер или AQI в регионе.' },
+  ]);
+  const [assistantLoading, setAssistantLoading] = useState(false);
+  const [assistantError, setAssistantError] = useState('');
   const [compareMode, setCompareMode] = useState(false);
   const [compareRegion, setCompareRegion] = useState<string | null>(null);
   const [compareAirQuality, setCompareAirQuality] = useState<AirQualityData | null>(null);
@@ -228,6 +235,27 @@ export function Home() {
     localStorage.setItem('region', regionKey);
     setSidebarOpen(false);
   }, []);
+
+  const handleAssistantAsk = useCallback(async () => {
+    const question = assistantQuestion.trim();
+    if (!question || assistantLoading) {
+      return;
+    }
+
+    setAssistantError('');
+    setAssistantMessages((prev) => [...prev, { role: 'user', text: question }]);
+    setAssistantQuestion('');
+    setAssistantLoading(true);
+
+    try {
+      const response = await assistantApi.ask(question, selectedRegion);
+      setAssistantMessages((prev) => [...prev, { role: 'assistant', text: response.answer }]);
+    } catch (e) {
+      setAssistantError('Не удалось получить ответ помощника. Попробуйте еще раз.');
+    } finally {
+      setAssistantLoading(false);
+    }
+  }, [assistantQuestion, assistantLoading, selectedRegion]);
 
   const toggleLang = () => {
     const newLang = lang === 'ru' ? 'kk' : 'ru';
@@ -876,6 +904,74 @@ export function Home() {
           </Box>
         </DialogContent>
       </Dialog>
+
+      <Box
+        sx={{
+          position: 'fixed',
+          right: 16,
+          bottom: 16,
+          zIndex: 1200,
+          width: assistantOpen ? { xs: 'calc(100% - 32px)', sm: 380 } : 'auto',
+        }}
+      >
+        {!assistantOpen ? (
+          <Button variant="contained" onClick={() => setAssistantOpen(true)} sx={{ borderRadius: '999px' }}>
+            Помощник по погоде
+          </Button>
+        ) : (
+          <Card sx={{ ...getGlassCardSx(muiTheme.palette.mode === 'dark'), p: 1.5 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', px: 1, pb: 1 }}>
+              <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>AI-помощник</Typography>
+              <IconButton size="small" onClick={() => setAssistantOpen(false)}>
+                <CloseIcon fontSize="small" />
+              </IconButton>
+            </Box>
+            <Box sx={{ maxHeight: 260, overflowY: 'auto', px: 1, pb: 1, display: 'flex', flexDirection: 'column', gap: 1 }}>
+              {assistantMessages.map((msg, idx) => (
+                <Box
+                  key={idx}
+                  sx={{
+                    alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start',
+                    maxWidth: '92%',
+                    px: 1.25,
+                    py: 0.9,
+                    borderRadius: 2,
+                    bgcolor: msg.role === 'user' ? 'primary.main' : getMetricCardBg(muiTheme.palette.mode === 'dark'),
+                    color: msg.role === 'user' ? '#fff' : 'text.primary',
+                  }}
+                >
+                  <Typography variant="body2">{msg.text}</Typography>
+                </Box>
+              ))}
+              {assistantLoading && <Typography variant="caption" color="text.secondary">Помощник думает...</Typography>}
+            </Box>
+            {assistantError && (
+              <Typography variant="caption" color="error" sx={{ px: 1, pb: 1, display: 'block' }}>
+                {assistantError}
+              </Typography>
+            )}
+            <Box sx={{ display: 'flex', gap: 1, p: 1 }}>
+              <TextField
+                value={assistantQuestion}
+                onChange={(e) => setAssistantQuestion(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleAssistantAsk();
+                  }
+                }}
+                fullWidth
+                size="small"
+                placeholder="Спросите про погоду и AQI..."
+                disabled={assistantLoading}
+              />
+              <Button variant="contained" onClick={handleAssistantAsk} disabled={assistantLoading || !assistantQuestion.trim()}>
+                Отпр.
+              </Button>
+            </Box>
+          </Card>
+        )}
+      </Box>
     </Box>
   );
 }

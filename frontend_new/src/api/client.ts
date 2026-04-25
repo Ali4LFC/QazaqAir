@@ -6,7 +6,8 @@ import type {
   User, 
   LoginCredentials, 
   RegisterCredentials, 
-  UpdateProfileData 
+  UpdateProfileData,
+  AssistantResponse,
 } from '@/types';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '';
@@ -85,6 +86,13 @@ export const authApi = {
 
   updateProfile: async (data: UpdateProfileData): Promise<User> => {
     const response = await apiClient.patch('/api/auth/me', data);
+    return response.data;
+  },
+};
+
+export const assistantApi = {
+  ask: async (question: string, region?: string): Promise<AssistantResponse> => {
+    const response = await apiClient.post('/api/assistant', { question, region });
     return response.data;
   },
 };

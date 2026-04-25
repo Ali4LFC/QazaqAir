@@ -1,5 +1,7 @@
 import asyncio
+import re
 from fastapi import APIRouter, HTTPException, Query
+from pydantic import BaseModel, Field
 from fastapi.responses import JSONResponse
 import httpx
 from sqlalchemy import select, inspect
@@ -10,6 +12,74 @@ from app.services.scheduler import scheduler_service
 from app.db.session import db
 
 router = APIRouter()
+
+
+class AssistantRequest(BaseModel):
+    question: str = Field(min_length=2, max_length=400)
+    region: str | None = None
+
+
+class AssistantResponse(BaseModel):
+    answer: str
+    region: str
+
+
+BLOCKED_TOPICS = [
+    "код", "code", "github", "repo", "репозитор", "парол", "password", "secret", "token",
+    "ключ", "api key", "docker", "compose", "sql", "ssh", "конфиг", "config", "env",
+]
+
+
+def _extract_region_from_question(question: str):
+    normalized_question = question.strip().lower()
+    if not normalized_question:
+        return None
+
+    for region in settings.REGIONS:
+        candidates = [
+            region.get("key"),
+            region.get("name"),
+            region.get("name_kk"),
+            region.get("city"),
+            *(region.get("aliases") or []),
+        ]
+
+        for candidate in candidates:
+            if not candidate:
+                continue
+            needle = str(candidate).strip().lower()
+            if not needle:
+                continue
+            if re.search(rf"(?<!\w){re.escape(needle)}(?!\w)", normalized_question):
+                return region
+
+    return None
+
+
+def _aqi_level_text(aqi: int) -> str:
+    if aqi <= 50:
+        return "Хорошее"
+    if aqi <= 100:
+        return "Умеренное"
+    if aqi <= 150:
+        return "Вредно для чувствительных групп"
+    if aqi <= 200:
+        return "Вредное"
+    if aqi <= 300:
+        return "Очень вредное"
+    return "Опасное"
+
+
+def _safety_advice(aqi: int) -> str:
+    if aqi <= 50:
+        return "Можно проводить время на улице без ограничений."
+    if aqi <= 100:
+        return "Для большинства людей воздух приемлем, но чувствительным группам лучше сократить длительные нагрузки."
+    if aqi <= 150:
+        return "Детям, пожилым и людям с заболеваниями дыхательных путей лучше сократить время на улице."
+    if aqi <= 200:
+        return "Рекомендуется ограничить активность на открытом воздухе и по возможности использовать маску."
+    return "Лучше минимизировать пребывание на улице, держать окна закрытыми и использовать очиститель воздуха."
 
 @router.get("/air-quality")
 async def get_air_quality(region: str | None = Query(default=None)):
@@ -108,3 +178,58 @@ async def db_status():
         "url": url_prefix,
         "error": err
     }
+
+
+@router.post("/assistant", response_model=AssistantResponse)
+async def site_assistant(payload: AssistantRequest):
+    q = payload.question.strip().lower()
+    if any(topic in q for topic in BLOCKED_TOPICS):
+        return AssistantResponse(
+            answer="Я помогаю только по погоде и качеству воздуха. По коду, секретам и внутренней инфраструктуре не консультирую.",
+            region="n/a",
+        )
+
+    region_name = settings.CITY
+    try:
+        region_from_question = _extract_region_from_question(payload.question)
+
+        if payload.region:
+            region_from_payload = waqi_service.get_region_by_key_or_name(payload.region)
+            if not region_from_payload:
+                raise HTTPException(status_code=404, detail="Region not found")
+        else:
+            region_from_payload = None
+
+        resolved_region = region_from_question or region_from_payload
+
+        if resolved_region:
+            region_name = resolved_region["name"]
+            cached = waqi_service._cache_get(resolved_region["key"])
+            data = cached if cached else await waqi_service.fetch_for_region(resolved_region)
+            if not cached:
+                waqi_service._cache_set(resolved_region["key"], data)
+        else:
+            cached = waqi_service._cache_get(settings.CITY.lower())
+            data = cached if cached else await waqi_service.fetch_city_data(settings.CITY)
+            if not cached:
+                waqi_service._cache_set(settings.CITY.lower(), data)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Assistant request failed: {str(e)}")
+
+    weather = data["current"]["weather"]
+    pollution = data["current"]["pollution"]
+    temp = weather.get("tp")
+    humidity = weather.get("hu")
+    wind = weather.get("ws")
+    aqi = int(pollution.get("aqius") or 0)
+    aqi_level = _aqi_level_text(aqi)
+    advice = _safety_advice(aqi)
+
+    answer = (
+        f"Регион: {region_name}. Сейчас: температура {temp}°C, влажность {humidity}%, ветер {wind} м/с. "
+        f"Индекс качества воздуха AQI: {aqi} ({aqi_level}). {advice}"
+    )
+
+    return AssistantResponse(answer=answer, region=region_name)

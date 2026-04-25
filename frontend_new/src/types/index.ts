@@ -76,5 +76,10 @@ export interface ApiError {
   detail: string;
 }
 
+export interface AssistantResponse {
+  answer: string;
+  region: string;
+}
+
 export type Language = 'kk' | 'ru';
 export type Theme = 'light' | 'dark';
