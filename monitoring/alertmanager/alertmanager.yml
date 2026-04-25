@@ -2,20 +2,50 @@ global:
   resolve_timeout: 5m
 
 route:
-  group_by: ['alertname']
-  group_wait: 10s
-  group_interval: 10s
-  repeat_interval: 1h
-  receiver: 'web.hook'
+  group_by: ['alertname', 'severity', 'job']
+  group_wait: 20s
+  group_interval: 2m
+  repeat_interval: 2h
+  receiver: 'default-webhook'
+  routes:
+    - matchers:
+        - severity="critical"
+      receiver: 'critical-webhook'
+      group_wait: 10s
+      repeat_interval: 30m
+
+    - matchers:
+        - severity="warning"
+      receiver: 'warning-webhook'
+      group_wait: 30s
+      repeat_interval: 2h
 
 receivers:
-- name: 'web.hook'
+- name: 'default-webhook'
   webhook_configs:
     - url: 'http://127.0.0.1:5001/'
 
+- name: 'critical-webhook'
+  webhook_configs:
+    - url: 'http://127.0.0.1:5001/'
+      send_resolved: true
+
+- name: 'warning-webhook'
+  webhook_configs:
+    - url: 'http://127.0.0.1:5001/'
+      send_resolved: true
+
+- name: 'null'
+
 inhibit_rules:
-  - source_match:
-      severity: 'critical'
-    target_match:
-      severity: 'warning'
-    equal: ['alertname', 'dev', 'instance']
+  - source_matchers:
+      - severity="critical"
+    target_matchers:
+      - severity="warning"
+    equal: ['alertname', 'instance', 'job']
+
+  - source_matchers:
+      - alertname="InstanceDown"
+    target_matchers:
+      - alertname="BlackboxProbeFailed"
+    equal: ['instance']

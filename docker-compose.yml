@@ -519,6 +519,29 @@ services:
           memory: 128M
           cpus: '0.1'
 
+  monitor-bot:
+    build: ./monitoring/bot
+    container_name: monitor-bot
+    env_file:
+      - ./monitoring/telegram_bot.env
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - app-network
+    restart: always
+    depends_on:
+      - prometheus
+      - grafana
+      - alertmanager
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.25'
+        reservations:
+          memory: 128M
+          cpus: '0.1'
+
   nagios:
     image: jasonrivers/nagios:latest
     container_name: qazaqair-nagios-1

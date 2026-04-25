@@ -2,9 +2,7 @@ import docker
 import telebot
 import requests
 import os
-import threading
 import time
-import pandas as pd
 from datetime import datetime, timedelta
 from io import BytesIO
 from openai import OpenAI
@@ -18,6 +16,7 @@ ALERTMANAGER_URL = os.getenv('ALERTMANAGER_URL', 'http://alertmanager:9093')
 GRAFANA_URL = os.getenv('GRAFANA_URL', 'http://grafana:3000')
 GRAFANA_API_KEY = os.getenv('GRAFANA_API_KEY')
 DASHBOARD_UID = os.getenv('DASHBOARD_UID', 'node-exporter-full')
+COMPOSE_PROJECT_NAME = os.getenv('COMPOSE_PROJECT_NAME', 'qazaqair')
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 OPENAI_API_BASE = os.getenv('OPENAI_API_BASE', 'https://api.openai.com/v1')
 AI_MODEL = os.getenv('AI_MODEL', 'gpt-3.5-turbo')
@@ -29,8 +28,42 @@ ai_client = OpenAI(
     base_url=OPENAI_API_BASE
 ) if OPENAI_API_KEY else None
 
+CORE_PANELS = {
+    "cpu": 7,
+    "ram": 156,
+    "disk": 16,
+    "containers": 13,
+}
+
+METRIC_QUERIES = {
+    "cpu_usage": '100 - (avg(rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)',
+    "memory_usage": '(1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100',
+    "disk_usage": '(1 - (node_filesystem_avail_bytes{mountpoint="/",fstype!~"tmpfs|overlay"} / node_filesystem_size_bytes{mountpoint="/",fstype!~"tmpfs|overlay"})) * 100',
+}
+
 def is_authorized(message):
     return message.from_user.id in ALLOWED_USER_IDS
+
+
+def build_main_menu():
+    kb = telebot.types.InlineKeyboardMarkup(row_width=2)
+    kb.add(
+        telebot.types.InlineKeyboardButton("📊 Текущие метрики", callback_data="menu_metrics"),
+        telebot.types.InlineKeyboardButton("🚨 Активные алерты", callback_data="menu_alerts"),
+    )
+    kb.add(
+        telebot.types.InlineKeyboardButton("🖥️ CPU график", callback_data="panel_cpu"),
+        telebot.types.InlineKeyboardButton("🧠 RAM график", callback_data="panel_ram"),
+    )
+    kb.add(
+        telebot.types.InlineKeyboardButton("💽 Disk график", callback_data="panel_disk"),
+        telebot.types.InlineKeyboardButton("📦 Контейнеры график", callback_data="panel_containers"),
+    )
+    kb.add(
+        telebot.types.InlineKeyboardButton("📈 Все ключевые графики", callback_data="menu_dashboard"),
+        telebot.types.InlineKeyboardButton("🔌 Состояние контейнеров", callback_data="menu_status"),
+    )
+    return kb
 
 # --- Helper functions ---
 
@@ -45,8 +78,70 @@ def get_prometheus_metric(query):
         print(f"Error querying Prometheus: {e}")
     return "N/A"
 
+
+def get_prometheus_metrics_snapshot():
+    snapshot = {}
+    for key, query in METRIC_QUERIES.items():
+        snapshot[key] = get_prometheus_metric(query)
+    return snapshot
+
+
+def format_percent_metric(value):
+    if value in (None, "N/A"):
+        return "N/A"
+    try:
+        return f"{float(value):.2f}%"
+    except Exception:
+        return str(value)
+
+
+def get_active_alerts():
+    try:
+        response = requests.get(f"{ALERTMANAGER_URL}/api/v2/alerts", timeout=20)
+        response.raise_for_status()
+        alerts = response.json()
+        active = []
+        for alert in alerts:
+            status = alert.get("status", {}).get("state", "")
+            if status != "active":
+                continue
+            labels = alert.get("labels", {})
+            active.append({
+                "name": labels.get("alertname", "unknown"),
+                "severity": labels.get("severity", "n/a"),
+                "instance": labels.get("instance", "n/a"),
+            })
+        return active
+    except Exception as e:
+        print(f"Error querying Alertmanager: {e}")
+        return None
+
+
+def send_core_dashboard(chat_id):
+    bot.send_message(chat_id, "⌛ Рендерю ключевые графики Grafana (CPU/RAM/Disk/Containers)...")
+    media = []
+    captions = {
+        "cpu": "🖥️ CPU usage (30m)",
+        "ram": "🧠 RAM usage (30m)",
+        "disk": "💽 Disk usage (30m)",
+        "containers": "📦 Containers / network (30m)",
+    }
+    for key, panel_id in CORE_PANELS.items():
+        img = render_grafana_panel(panel_id)
+        if img:
+            media.append(telebot.types.InputMediaPhoto(img, caption=captions.get(key, key)))
+
+    if len(media) >= 2:
+        bot.send_media_group(chat_id, media)
+    elif len(media) == 1:
+        bot.send_photo(chat_id, media[0].media, caption=media[0].caption)
+    else:
+        bot.send_message(chat_id, "❌ Не удалось получить графики. Проверь `GRAFANA_API_KEY`, `DASHBOARD_UID` и renderer в Grafana.")
+
 def render_grafana_panel(panel_id, from_time="now-30m", to_time="now"):
-    headers = {'Authorization': f'Bearer {GRAFANA_API_KEY}'}
+    headers = {}
+    if GRAFANA_API_KEY:
+        headers['Authorization'] = f'Bearer {GRAFANA_API_KEY}'
     # Typical render URL for Grafana (using UID only)
     url = f"{GRAFANA_URL}/render/d-solo/{DASHBOARD_UID}?panelId={panel_id}&from={from_time}&to={to_time}&width=1000&height=500"
     try:
@@ -55,7 +150,45 @@ def render_grafana_panel(panel_id, from_time="now-30m", to_time="now"):
         return BytesIO(response.content)
     except Exception as e:
         print(f"Error rendering Grafana panel {panel_id}: {e}")
+        if hasattr(e, 'response') and e.response is not None:
+            print(f"Grafana response [{e.response.status_code}]: {e.response.text[:300]}")
         return None
+
+
+def get_project_containers():
+    try:
+        containers = client.containers.list(
+            all=True,
+            filters={"label": f"com.docker.compose.project={COMPOSE_PROJECT_NAME}"}
+        )
+        if containers:
+            return containers
+    except Exception as e:
+        print(f"Error filtering containers by compose project label: {e}")
+
+    # Fallback: keep previous behavior if label-based filtering fails
+    return client.containers.list(all=True)
+
+
+def format_container_status_report():
+    containers = get_project_containers()
+    report = "🔌 *Service Status Report:*\n\n"
+
+    one_shot_services = {'zabbix-setup'}
+    for c in containers:
+        status = c.status
+        exit_code = c.attrs.get('State', {}).get('ExitCode') if hasattr(c, 'attrs') else None
+
+        if c.name in one_shot_services and status == 'exited' and exit_code == 0:
+            status_icon = "⚙️"
+            status_text = "completed"
+        else:
+            status_icon = "✅" if status == "running" else "❌"
+            status_text = status
+
+        report += f"{status_icon} `{c.name}`: {status_text}\n"
+
+    return report
 
 # --- Bot Command Handlers ---
 
@@ -77,8 +210,16 @@ def send_welcome(message):
         "/logs [service] - Last 20 log lines\n"
         "/restart [service] - Restart container\n"
         "/alerts - Active alerts\n"
+        "/metrics - Current CPU/RAM/Disk metrics\n"
+        "/menu - Open interactive monitoring menu\n"
     )
-    bot.reply_to(message, help_text, parse_mode='Markdown')
+    bot.reply_to(message, help_text, parse_mode='Markdown', reply_markup=build_main_menu())
+
+
+@bot.message_handler(commands=['menu'])
+def menu_command(message):
+    if not is_authorized(message): return
+    bot.send_message(message.chat.id, "Выбери, что проверить 👇", reply_markup=build_main_menu())
 
 @bot.message_handler(commands=['render'])
 def render_command(message):
@@ -98,23 +239,21 @@ def render_command(message):
 @bot.message_handler(commands=['dashboard'])
 def dashboard_command(message):
     if not is_authorized(message): return
-    bot.send_message(message.chat.id, "⌛ Rendering dashboard graphs, please wait...")
-    panels = {
-        "CPU": 7,     # Common IDs in Node Exporter Full
-        "RAM": 156,
-        "Disk": 16,
-        "Network": 13
-    }
-    media = []
-    for name, pid in panels.items():
-        img = render_grafana_panel(pid)
-        if img:
-            media.append(telebot.types.InputMediaPhoto(img, caption=f"📊 {name} usage (30m)"))
-    
-    if media:
-        bot.send_media_group(message.chat.id, media)
-    else:
-        bot.reply_to(message, "❌ Could not render dashboard panels.")
+    send_core_dashboard(message.chat.id)
+
+
+@bot.message_handler(commands=['metrics'])
+def metrics_command(message):
+    if not is_authorized(message): return
+    snapshot = get_prometheus_metrics_snapshot()
+    text = (
+        "📊 *Текущие метрики системы*\n\n"
+        f"🖥️ CPU: `{format_percent_metric(snapshot.get('cpu_usage'))}`\n"
+        f"🧠 RAM: `{format_percent_metric(snapshot.get('memory_usage'))}`\n"
+        f"💽 Disk (/): `{format_percent_metric(snapshot.get('disk_usage'))}`\n"
+        f"🕒 Updated: `{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}`"
+    )
+    bot.reply_to(message, text, parse_mode='Markdown')
 
 @bot.message_handler(commands=['top_cpu'])
 def top_cpu_command(message):
@@ -147,6 +286,28 @@ def uptime_command(message):
     except:
         bot.reply_to(message, "❌ Error calculating uptime.")
 
+
+@bot.message_handler(commands=['alerts'])
+def alerts_command(message):
+    if not is_authorized(message): return
+    active_alerts = get_active_alerts()
+    if active_alerts is None:
+        bot.reply_to(message, "❌ Не удалось получить алерты из Alertmanager.")
+        return
+
+    if not active_alerts:
+        bot.reply_to(message, "✅ Активных алертов нет.")
+        return
+
+    lines = ["🚨 *Активные алерты:*\n"]
+    for i, alert in enumerate(active_alerts[:10], start=1):
+        lines.append(
+            f"{i}. *{alert['name']}* | severity: `{alert['severity']}` | instance: `{alert['instance']}`"
+        )
+    if len(active_alerts) > 10:
+        lines.append(f"\n…and {len(active_alerts) - 10} more")
+    bot.reply_to(message, "\n".join(lines), parse_mode='Markdown')
+
 @bot.message_handler(commands=['logs'])
 def logs_command(message):
     if not is_authorized(message): return
@@ -166,11 +327,7 @@ def logs_command(message):
 def status_command(message):
     if not is_authorized(message): return
     try:
-        containers = client.containers.list(all=True)
-        report = "🔌 *Service Status Report:*\n\n"
-        for c in containers:
-            status_icon = "✅" if c.status == "running" else "❌"
-            report += f"{status_icon} `{c.name}`: {c.status}\n"
+        report = format_container_status_report()
         bot.reply_to(message, report, parse_mode='Markdown')
     except Exception as e:
         bot.reply_to(message, f"❌ Error: {e}")
@@ -188,6 +345,63 @@ def restart_command(message):
         bot.reply_to(message, f"✅ Restarted.")
     except Exception as e:
         bot.reply_to(message, f"❌ Error: {e}")
+
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith('menu_') or call.data.startswith('panel_'))
+def callbacks(call):
+    message = call.message
+    if not message:
+        return
+
+    if message.chat.type == 'private' and call.from_user.id not in ALLOWED_USER_IDS:
+        bot.answer_callback_query(call.id, "Нет доступа")
+        return
+
+    data = call.data
+    bot.answer_callback_query(call.id)
+
+    if data == 'menu_metrics':
+        snapshot = get_prometheus_metrics_snapshot()
+        text = (
+            "📊 *Текущие метрики системы*\n\n"
+            f"🖥️ CPU: `{format_percent_metric(snapshot.get('cpu_usage'))}`\n"
+            f"🧠 RAM: `{format_percent_metric(snapshot.get('memory_usage'))}`\n"
+            f"💽 Disk (/): `{format_percent_metric(snapshot.get('disk_usage'))}`\n"
+            f"🕒 Updated: `{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}`"
+        )
+        bot.send_message(message.chat.id, text, parse_mode='Markdown')
+    elif data == 'menu_alerts':
+        active_alerts = get_active_alerts()
+        if active_alerts is None:
+            bot.send_message(message.chat.id, "❌ Не удалось получить алерты из Alertmanager.")
+        elif not active_alerts:
+            bot.send_message(message.chat.id, "✅ Активных алертов нет.")
+        else:
+            lines = ["🚨 *Активные алерты:*\n"]
+            for i, alert in enumerate(active_alerts[:10], start=1):
+                lines.append(
+                    f"{i}. *{alert['name']}* | severity: `{alert['severity']}` | instance: `{alert['instance']}`"
+                )
+            if len(active_alerts) > 10:
+                lines.append(f"\n…and {len(active_alerts) - 10} more")
+            bot.send_message(message.chat.id, "\n".join(lines), parse_mode='Markdown')
+    elif data == 'menu_dashboard':
+        send_core_dashboard(message.chat.id)
+    elif data == 'menu_status':
+        report = format_container_status_report()
+        bot.send_message(message.chat.id, report, parse_mode='Markdown')
+    elif data.startswith('panel_'):
+        panel_key = data.replace('panel_', '')
+        panel_id = CORE_PANELS.get(panel_key)
+        if panel_id is None:
+            bot.send_message(message.chat.id, "⚠️ Неизвестная панель")
+            return
+        bot.send_chat_action(message.chat.id, 'upload_photo')
+        image = render_grafana_panel(panel_id)
+        if image:
+            bot.send_photo(message.chat.id, image, caption=f"📊 {panel_key.upper()} panel")
+        else:
+            bot.send_message(message.chat.id, "❌ Не удалось получить график из Grafana.")
 
 @bot.message_handler(commands=['ask'])
 def ask_ai_command(message):
@@ -219,13 +433,6 @@ def ask_ai_command(message):
     except Exception as e:
         bot.reply_to(message, f"❌ Error contacting AI: {e}")
 
-# --- Docker Event Listener ---
-def listen_docker_events():
-    for event in client.events(decode=True):
-        if event['Type'] == 'container' and event['Action'] in ['stop', 'die', 'oom']:
-            name = event['Actor']['Attributes'].get('name', 'unknown')
-            bot.send_message(CHAT_ID, f"🚨 *ALERT:* Container `{name}` {event['Action'].upper()}!", parse_mode='Markdown')
-
 if __name__ == "__main__":
     print("Starting bot initialization...")
     # Register commands in Telegram Menu
@@ -235,6 +442,7 @@ if __name__ == "__main__":
         time.sleep(2)
         
         bot.set_my_commands([
+            telebot.types.BotCommand("menu", "Всплывающее меню мониторинга"),
             telebot.types.BotCommand("dashboard", "Основные графики (CPU/RAM/Disk)"),
             telebot.types.BotCommand("status", "Состояние контейнеров"),
             telebot.types.BotCommand("metrics", "Текущие метрики"),

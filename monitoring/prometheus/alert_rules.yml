@@ -1,11 +1,151 @@
 groups:
-  - name: basic_alerts
+  - name: availability_alerts
     rules:
       - alert: InstanceDown
         expr: up == 0
-        for: 1m
+        for: 2m
         labels:
           severity: critical
+          team: platform
         annotations:
-          summary: "Instance {{ $labels.instance }} down"
-          description: "{{ $labels.instance }} of job {{ $labels.job }} has been down for more than 1 minute."
+          summary: "Инстанс недоступен: {{ $labels.instance }}"
+          description: "Таргет {{ $labels.instance }} (job={{ $labels.job }}) не отвечает более 2 минут."
+          runbook: "Проверить контейнер/сервис, сеть и логи `docker logs` для {{ $labels.instance }}."
+
+      - alert: BlackboxProbeFailed
+        expr: probe_success == 0
+        for: 2m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: "Проба Blackbox неуспешна: {{ $labels.instance }}"
+          description: "Проверка {{ $labels.job }} для {{ $labels.instance }} завершилась ошибкой."
+          runbook: "Проверить endpoint/порт и доступность из сети мониторинга."
+
+      - alert: HighProbeLatency
+        expr: probe_duration_seconds > 2
+        for: 5m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "Высокая задержка проверки: {{ $labels.instance }}"
+          description: "Время ответа {{ $labels.instance }} > 2с более 5 минут."
+          runbook: "Проверить нагрузку, сеть и upstream-зависимости."
+
+  - name: host_resource_alerts
+    rules:
+      - alert: HostHighCPUUsage
+        expr: (100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)) > 85
+        for: 10m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "Высокая загрузка CPU: {{ $labels.instance }}"
+          description: "CPU на {{ $labels.instance }} выше 85% более 10 минут."
+          runbook: "Проверить топ-процессы/контейнеры и динамику нагрузки."
+
+      - alert: HostCriticalCPUUsage
+        expr: (100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)) > 95
+        for: 5m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: "Критическая загрузка CPU: {{ $labels.instance }}"
+          description: "CPU на {{ $labels.instance }} выше 95% более 5 минут."
+          runbook: "Срочно снизить нагрузку/масштабировать сервисы."
+
+      - alert: HostHighMemoryUsage
+        expr: ((1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100) > 85
+        for: 10m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "Высокое использование RAM: {{ $labels.instance }}"
+          description: "Использование RAM на {{ $labels.instance }} выше 85% более 10 минут."
+          runbook: "Проверить memory-heavy процессы и утечки памяти."
+
+      - alert: HostCriticalMemoryUsage
+        expr: ((1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100) > 95
+        for: 5m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: "Критическое использование RAM: {{ $labels.instance }}"
+          description: "Использование RAM на {{ $labels.instance }} выше 95% более 5 минут."
+          runbook: "Срочно освободить память или перезапустить проблемный сервис."
+
+      - alert: HostDiskSpaceLow
+        expr: (100 - ((node_filesystem_avail_bytes{fstype!~"tmpfs|overlay",mountpoint!~"/run.*|/var/lib/docker.*"} * 100) / node_filesystem_size_bytes{fstype!~"tmpfs|overlay",mountpoint!~"/run.*|/var/lib/docker.*"})) > 85
+        for: 10m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "Мало свободного места на диске: {{ $labels.instance }} {{ $labels.mountpoint }}"
+          description: "Использование диска на {{ $labels.mountpoint }} выше 85% более 10 минут."
+          runbook: "Очистить логи/временные файлы, проверить рост данных."
+
+      - alert: HostDiskSpaceCritical
+        expr: (100 - ((node_filesystem_avail_bytes{fstype!~"tmpfs|overlay",mountpoint!~"/run.*|/var/lib/docker.*"} * 100) / node_filesystem_size_bytes{fstype!~"tmpfs|overlay",mountpoint!~"/run.*|/var/lib/docker.*"})) > 95
+        for: 5m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: "Критически мало места на диске: {{ $labels.instance }} {{ $labels.mountpoint }}"
+          description: "Использование диска на {{ $labels.mountpoint }} выше 95% более 5 минут."
+          runbook: "Срочно освободить место, иначе возможна деградация сервисов."
+
+  - name: container_alerts
+    rules:
+      - alert: ContainerHighCPUUsage
+        expr: sum by (name) (rate(container_cpu_usage_seconds_total{name!="",image!=""}[5m])) * 100 > 80
+        for: 10m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "Контейнер нагружает CPU: {{ $labels.name }}"
+          description: "Контейнер {{ $labels.name }} держит CPU выше 80% более 10 минут."
+          runbook: "Проверить логи и профиль нагрузки контейнера."
+
+      - alert: ContainerHighMemoryUsage
+        expr: ((container_memory_working_set_bytes{name!="",image!=""} / container_spec_memory_limit_bytes{name!="",image!=""}) * 100 > 90) and on(name) (container_spec_memory_limit_bytes{name!="",image!=""} > 0)
+        for: 10m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "Контейнер близок к лимиту RAM: {{ $labels.name }}"
+          description: "Контейнер {{ $labels.name }} использует >90% memory limit более 10 минут."
+          runbook: "Проверить утечки памяти/лимиты контейнера."
+
+  - name: database_alerts
+    rules:
+      - alert: PostgresExporterDown
+        expr: up{job="postgres-exporter"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          team: database
+        annotations:
+          summary: "PostgreSQL exporter недоступен"
+          description: "Метрики PostgreSQL не собираются более 2 минут."
+          runbook: "Проверить контейнер postgres-exporter и соединение с БД."
+
+      - alert: PostgresTooManyConnections
+        expr: (pg_stat_database_numbackends / pg_settings_max_connections) * 100 > 85
+        for: 10m
+        labels:
+          severity: warning
+          team: database
+        annotations:
+          summary: "Высокая утилизация соединений PostgreSQL"
+          description: "Используется >85% доступных соединений к PostgreSQL более 10 минут."
+          runbook: "Проверить пул соединений и долгие запросы."
