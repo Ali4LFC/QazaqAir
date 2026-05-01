@@ -1,0 +1,5 @@
+# Lab 3: Значения переменных для production окружения
+# Настроено под eu-central-1 (Frankfurt)
+
+environment = "prod"
+aws_region  = "eu-central-1"
