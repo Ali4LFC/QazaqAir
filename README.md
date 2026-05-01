@@ -1,8 +1,7 @@
 # 🌬️ QazaqAir
 
-Веб‑приложение для **мониторинга качества воздуха** по регионам Казахстана:  
-выбор региона, интерактивная карта, индикатор AQI, погода, сводка по «самым чистым/грязным».  
-Поддерживает **казахский** (по умолчанию) и **русский** языки.
+Веб‑приложение для **мониторинга качества воздуха** по регионам Казахстана.  
+Современный стек технологий, полноценная инфраструктура мониторинга, авторизация пользователей и поддержка казахского/русского языков.
 
 ---
 
@@ -10,199 +9,289 @@
 
 - [Описание](#-описание)
 - [Архитектура](#-архитектура)
-- [Стек и функции](#-стек-и-функции)
+- [Технологический стек](#-технологический-стек)
+- [Структура проекта](#-структура-проекта)
 - [Установка и запуск](#-установка-и-запуск)
-- [Конфигурация .env](#-конфигурация-env)
-- [API](#-api)
-- [Интерфейс](#-интерфейс)
-- [Сохранение в PostgreSQL](#-сохранение-в-postgresql)
-- [Резервное копирование](#-резервное-копирование-бд)
-- [SSH Управление](#-ssh-управление)
-- [Запуск через Docker](#-запуск-через-docker)
-- [📊 Инфраструктура мониторинга](#-инфраструктура-мониторинга)
-- [Известные особенности](#-известные-особенности)
-- [Безопасность](#-безопасность-ssl-файрвол-rate-limit)
+- [API endpoints](#-api-endpoints)
+- [Мониторинг и логирование](#-мониторинг-и-логирование)
+- [Безопасность](#-безопасность)
+- [Конфигурация и учетные данные](#-конфигурация-и-учетные-данные)
+- [Инфраструктура как код](#-инфраструктура-как-код)
+- [CI/CD](#-cicd)
 - [Авторы](#-авторы)
 
 ## 📋 Описание
 
-Пользователь открывает страницу и видит:
+QazaqAir — это комплексное решение для мониторинга качества воздуха в Казахстане.
 
-- **Многоязычность**: Полная поддержка казахского и русского языков.
-- **AQI** по US EPA с цветовой индикацией
-- **Погоду**: температура, влажность, ветер
-- **Карту** с контуром Казахстана и маркерами регионов
-- **Селектор регионов** в боковой панели (гамбургер ☰)
-- **Сводку**: топ‑10 самых чистых/грязных регионов
-- **Тёмную/светлую тему** с переключателем
+### Ключевые функции:
+
+- **🌍 Многоязычность**: Полная поддержка казахского и русского языков
+- **📊 AQI мониторинг**: Индекс качества воздуха по US EPA с цветовой индикацией
+- **🗺️ Интерактивная карта**: Карта Казахстана с маркерами регионов
+- **🔐 Авторизация**: JWT-based регистрация и вход пользователей
+- **👤 Личный кабинет**: Выбор города, управление профилем
+- **🌡️ Погода**: Температура, влажность, скорость ветра
+- **📈 Сводка**: Топ-10 чистых и загрязненных регионов
+- **🌙 Темная/светлая тема**: Автоматическое переключение
+- **💾 История данных**: Почасовое сохранение в PostgreSQL
+- **🔔 Уведомления**: Telegram-бот для алертов
 
 ---
 
 ## 🏗️ Архитектура
 
-Проект построен по схеме **клиент–сервер**:
+### Общая схема
 
 ```
-┌─────────────────────────────────────────────┐
-│              Браузер (Клиент)               │
-│   index.html + style.css + script.js        │
-│   Leaflet.js (карта)                        │
-│                    │                        │
-│   GET /api/air-quality (каждые 60 сек)      │
-└────────────────────┬────────────────────────┘
-                     │ HTTP
-┌────────────────────▼────────────────────────┐
-│           Python-сервер (FastAPI)           │
-│                 app.py                      │
-│   • Хранит токен в .env                     │
-│   • Кеширует ответы (60 сек)                │
-│   • Преобразует WAQI → JSON                 │
-│   • Сохраняет почасовые данные в PostgreSQL │
-└────────────────────┬────────────────────────┘
-                     │ HTTPS
-┌────────────────────▼────────────────────────┐
-│           WAQI API (waqi.info)              │
-│   /feed/{city}?token=...                    │
-│   /feed/geo:{lat};{lon}?token=...           │
-└─────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│                       Клиент                                │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │  React + TypeScript + Vite (frontend_new)          │   │
+│  │  • React Router v7                                  │   │
+│  │  • Tailwind CSS v4                                  │   │
+│  │  • React Leaflet (карта)                            │   │
+│  └─────────────────────────────────────────────────────┘   │
+└───────────────────────────┬─────────────────────────────────┘
+                            │ HTTPS/HTTP
+┌───────────────────────────▼─────────────────────────────────┐
+│                    Nginx (Reverse Proxy)                     │
+│              Порт 80/443 → проксирование                    │
+└───────────────────────────┬─────────────────────────────────┘
+                            │
+┌───────────────────────────▼─────────────────────────────────┐
+│                   Backend (FastAPI)                          │
+│  • REST API /api/*                                          │
+│  • JWT авторизация                                          │
+│  • Кеширование WAQI (60 сек)                                │
+│  • Rate limiting, Firewall                                  │
+│  • SSH-сервер (порт 2222)                                   │
+└───────┬─────────────┬───────────────────────────────────────┘
+        │             │
+        ▼             ▼
+┌──────────────┐  ┌─────────────────────────────────────────┐
+│   Supabase   │  │          WAQI API (waqi.info)          │
+│  PostgreSQL  │  │   /feed/{city}?token=...               │
+└──────────────┘  └─────────────────────────────────────────┘
 ```
 
-**Ключевые решения:**
+### Инфраструктура мониторинга
 
-| Решение                       | Обоснование                   |
-| ----------------------------- | ----------------------------- |
-| Токен в `.env` на сервере     | Не утекает в клиент           |
-| Кеширование (60 сек)          | Снижение нагрузки/лимитов     |
-| FastAPI                       | Быстрый, асинхронный, `/docs` |
-| Leaflet.js + CARTO            | Красивые свободные тайлы      |
-| PostgreSQL (почасовая запись) | История для аналитики         |
+```
+┌─────────────────────────────────────────────────────────────┐
+│              Полный стек мониторинга                         │
+├──────────────┬──────────────┬──────────────┬─────────────────┤
+│  Prometheus  │   Grafana    │    Zabbix    │     Nagios      │
+│  (9090)      │   (3000)     │   (8086)     │    (8083)       │
+├──────────────┼──────────────┼──────────────┼─────────────────┤
+│  Node Exp    │  Dashboards  │  Server      │  NRPE Agent     │
+│  cAdvisor    │  Alerts      │  Web UI      │  Plugins        │
+│  Postgres Exp│  Telegram    │  Agent       │  Graphing       │
+└──────────────┴──────────────┴──────────────┴─────────────────┘
+```
 
 ---
 
-## 📁 Структура файлов
+## 📁 Структура проекта
 
 ```
 QazaqAir/
-├── backend/
-│   ├── .env                    — переменные окружения (токены, БД)
-│   └── app/
-│       ├── api/
-│       │   └── endpoints/      — эндпоинты API (air_quality.py)
-│       ├── core/
-│       │   └── config.py       — конфигурация и список регионов
-│       ├── db/
-│       │   └── session.py      — подключение к БД (SQLAlchemy)
-│       ├── services/
-│       │   ├── waqi_service.py — логика работы с WAQI API
-│       │   └── scheduler.py    — фоновые задачи (APScheduler)
-│       └── main.py             — точка входа (FastAPI)
-├── frontend/
-│   ├── index.html              — разметка
-│   ├── style.css               — стили
-│   └── script.js               — логика фронтенда
-├── monitoring/                 — 📊 Инфраструктура мониторинга (Docker Stack)
-│   ├── alertmanager/           — уведомления (Telegram)
-│   ├── grafana/                — визуализация (предустановленные дашборды)
-│   ├── prometheus/             — сбор метрик и правила алертинга
-│   └── docker-compose.yml      — манифест мониторинга
-├── bot/                        — кастомный мониторинг бот (Telegram)
-├── requirements.txt            — зависимости
-└── README.md                   — документация
+├── backend/                    # FastAPI бэкенд
+│   ├── app/
+│   │   ├── api/
+│   │   │   └── endpoints/      # API endpoints (air_quality, auth)
+│   │   ├── core/
+│   │   │   └── config.py       # Конфигурация приложения
+│   │   ├── db/
+│   │   │   └── session.py      # SQLAlchemy + Supabase
+│   │   ├── services/
+│   │   │   ├── waqi_service.py # WAQI API интеграция
+│   │   │   ├── scheduler.py    # Фоновые задачи
+│   │   │   └── ssh_service.py  # SSH сервер
+│   │   └── main.py             # Точка входа FastAPI
+│   └── .env                    # Переменные окружения
+│
+├── frontend_new/               # React + TypeScript фронтенд
+│   ├── src/
+│   │   ├── api/                # API клиенты
+│   │   ├── components/         # UI компоненты
+│   │   ├── context/            # React Context (Auth)
+│   │   ├── pages/              # Страницы (Home, Login, Profile)
+│   │   └── types/              # TypeScript типы
+│   ├── package.json
+│   └── Dockerfile
+│
+├── monitoring/                 # Инфраструктура мониторинга
+│   ├── alertmanager/           # Уведомления
+│   ├── grafana/                # Визуализация
+│   ├── prometheus/             # Сбор метрик
+│   ├── bot/                    # Telegram бот
+│   └── docker-compose.yml
+│
+├── infrastructure/             # Документация инфраструктуры
+├── security/                   # Настройки безопасности
+├── terraform/                  # IaC для облака
+├── ansible/                    # Конфигурация серверов
+├── html/                       # Сборка фронтенда для nginx
+├── backups/                    # Резервные копии БД
+└── docker-compose.yml          # Полный стек сервисов
 ```
 
 ---
 
-## ⚙️ Стек и функции
+## 🛠️ Технологический стек
 
-### Бэкенд (Python)
+### Backend
 
-| Библиотека      | Роль                                        |
-| --------------- | ------------------------------------------- |
-| `FastAPI`       | Web-фреймворк, REST API                     |
-| `uvicorn`       | ASGI-сервер для запуска FastAPI             |
-| `httpx`         | Асинхронный HTTP-клиент для запросов к WAQI |
-| `python-dotenv` | Загрузка переменных из `.env`               |
-| `SQLAlchemy`    | Определение схемы (создание таблицы)        |
-| `psycopg2`      | Вставка почасовых данных                    |
-| `APScheduler`   | Плановый запуск «каждый час»                |
+| Компонент       | Технология                                 |
+|-----------------|--------------------------------------------|
+| Framework       | FastAPI                                    |
+| Server          | Uvicorn (ASGI)                             |
+| Database        | PostgreSQL (Supabase)                      |
+| ORM             | SQLAlchemy                                 |
+| Auth            | JWT (python-jose)                          |
+| HTTP Client     | HTTPX                                      |
+| Scheduler       | APScheduler                                |
+| SSH Server      | asyncssh                                   |
 
-### Фронтенд (HTML / CSS / JavaScript)
+### Frontend
 
-| Технология            | Роль                                          |
-| --------------------- | --------------------------------------------- |
-| Vanilla JS (`fetch`)  | Запросы к бэкенду каждые 60 сек               |
-| Leaflet.js            | Карта + маркеры регионов                      |
-| CARTO Dark Tiles      | Тёмная тема карты (OpenStreetMap основа)      |
-| Google Fonts (Outfit) | Современная типографика                       |
-| CSS Glassmorphism     | Стеклянные карточки (`backdrop-filter: blur`) |
+| Компонент       | Технология                                 |
+|-----------------|--------------------------------------------|
+| Framework       | React 19 + TypeScript                      |
+| Build Tool      | Vite                                       |
+| Styling         | Tailwind CSS v4                            |
+| Router          | React Router v7                            |
+| Forms           | React Hook Form + Zod                      |
+| Maps            | React Leaflet                              |
+| Icons           | Lucide React                               |
+| HTTP Client     | Axios                                      |
+
+### Инфраструктура и DevOps
+
+| Компонент       | Технология                                 |
+|-----------------|--------------------------------------------|
+| Container       | Docker + Docker Compose                    |
+| Reverse Proxy   | Nginx                                      |
+| CI/CD           | Jenkins                                    |
+| IaC             | Terraform + Ansible                        |
+| Monitoring      | Prometheus + Grafana + Zabbix + Nagios   |
+| Automation      | n8n                                        |
+| Container Mgmt  | Portainer                                  |
+| Alerts          | Alertmanager + Telegram Bot                |
 
 ---
 
 ## 🚀 Установка и запуск
 
-### 1. Установить зависимости
+### Быстрый старт (Docker Compose)
+
+Самый простой способ — запустить полный стек через Docker Compose:
 
 ```bash
+# 1. Клонировать репозиторий
+git clone <repository-url>
+cd QazaqAir
+
+# 2. Настроить переменные окружения
+cp backend/.env.example backend/.env
+# Отредактировать backend/.env, добавить WAQI_TOKEN
+
+# 3. Запустить все сервисы
+docker-compose up -d --build
+
+# 4. Проверить статус
+docker-compose ps
+```
+
+Сервисы будут доступны:
+- **Приложение**: http://localhost
+- **Frontend**: http://localhost:3001
+- **Backend API**: http://localhost:8000
+- **Grafana**: http://localhost:3000 (admin/admin)
+- **Prometheus**: http://localhost:9090
+- **Jenkins**: http://localhost:8085
+- **Portainer**: http://localhost:9000
+
+### Ручная установка (для разработки)
+
+#### Backend
+
+```bash
+# Python зависимости
 pip install -r requirements.txt
+
+# Настройка окружения
+# backend/.env:
+# WAQI_TOKEN=ваш_токен_waqi
+# POSTGRES_URL=postgresql+psycopg2://user:pass@host:5432/db
+
+# Запуск
+python -m backend.app.main
+# или
+uvicorn backend.app.main:app --reload --port 8000
 ```
 
-### 2. Получить API-токен WAQI
-
-1. Зайти на [aqicn.org/api/](https://aqicn.org/api/)
-2. Ввести почту и получить токен
-
-### 3. Конфигурация .env
-
-Создать файл `.env` в папке `backend/`:
-
-```env
-WAQI_TOKEN=ваш_токен
-POSTGRES_URL=postgresql+psycopg2://user:password@localhost:5432/airmonitor
-```
-
-> ⚠️ Никогда не публикуйте `.env` файл в открытый репозиторий!
-
-### 4. Запустить сервер
-
-Для запуска используйте одну из следующих команд из корня проекта:
+#### Frontend
 
 ```bash
-# Вариант 1: Через модуль python
-python -m backend.app.main
-
-# Вариант 2: Напрямую через uvicorn
-uvicorn backend.app.main:app --reload --port 8001
+cd frontend_new
+npm install
+npm run dev
 ```
 
-### 5. Открыть в браузере
-
-```
-http://127.0.0.1:8001
-```
+Фронтенд запустится на http://localhost:5173
 
 ---
 
-## 🔗 API‑эндпоинты
+## 🔗 API Endpoints
 
-| Метод  | URL                             | Описание                        |
-| ------ | ------------------------------- | ------------------------------- |
-| `GET`  | `/`                             | Главная страница                |
-| `GET`  | `/api/air-quality?region={key}` | AQI/погода по региону           |
-| `GET`  | `/api/debug`                    | Состояние конфигурации          |
-| `GET`  | `/api/regions`                  | Список регионов                 |
-| `GET`  | `/api/summary`                  | Топ‑10 чистых/грязных           |
-| `POST` | `/api/save-hourly`              | Сохранить почасовые данные в БД |
-| `GET`  | `/docs`                         | Swagger UI (автодоки)           |
+### Air Quality
+
+| Метод  | URL                               | Описание                      |
+|--------|-----------------------------------|-------------------------------|
+| `GET`  | `/api/air-quality`                | Текущие данные (общие)        |
+| `GET`  | `/api/air-quality?region={key}`   | Данные по конкретному региону |
+| `GET`  | `/api/regions`                    | Список всех регионов          |
+| `GET`  | `/api/summary`                    | Топ-10 чистых/загрязненных    |
+| `POST` | `/api/save-hourly`                | Ручное сохранение данных      |
+
+### Authentication
+
+| Метод  | URL                               | Описание                      |
+|--------|-----------------------------------|-------------------------------|
+| `POST` | `/api/auth/register`              | Регистрация пользователя      |
+| `POST` | `/api/auth/login`                 | Вход (OAuth2 формат)          |
+| `GET`  | `/api/auth/me`                    | Получить профиль              |
+| `PATCH`| `/api/auth/me`                    | Обновить профиль              |
+
+### System
+
+| Метод  | URL                               | Описание                      |
+|--------|-----------------------------------|-------------------------------|
+| `GET`  | `/`                               | Главная страница (React)      |
+| `GET`  | `/health`                         | Health check                  |
+| `GET`  | `/docs`                           | Swagger UI документация       |
+| `GET`  | `/openapi.json`                   | OpenAPI схема                 |
 
 ---
 
 ## 🎨 Интерфейс
 
-- Гамбургер‑меню с боковой панелью регионов
-- Зелёные кнопки регионов с бейджем AQI
-- Клик по маркерам на карте переключает регион
-- Контур Казахстана и контур выбранного региона
-- Темная/светлая тема с переключателем
+### Страницы приложения
+
+- **Главная**: Карта Казахстана, AQI выбранного региона, погода, топ-10
+- **Вход**: Форма авторизации с JWT
+- **Регистрация**: Создание нового аккаунта
+- **Профиль**: Управление профилем, выбор города
+
+### Компоненты UI
+
+- Боковая панель со списком регионов
+- Интерактивная карта с маркерами
+- Карточки AQI с цветовой индикацией
+- Переключатель языка (RU/KK)
+- Переключатель темы (светлая/темная)
 
 ### Шкала AQI (US EPA)
 
@@ -212,123 +301,319 @@ http://127.0.0.1:8001
 | 51 – 100  | 🟡 Жёлтый        | Умеренно                     |
 | 101 – 150 | 🟠 Оранжевый     | Нездорово для чувствительных |
 | 151 – 200 | 🔴 Красный       | Нездорово                    |
-| 201 – 300 | 🟣 Фиолетовый    | Очень нездорово              |
-| 301+      | 🟤 Тёмно-красный | Опасно                       |
 
 ---
 
-## 💾 Сохранение в PostgreSQL
+## 📊 Мониторинг и логирование
 
-- Таблица: `aqi_hourly (region_key, city, ts_hour, aqi, temp_c, humidity_pct, wind_ms)`
-- Уникальность: `(region_key, ts_hour)` — сохраняется точное время записи (UTC+5)
-- Ручной запуск: `POST /api/save-hourly` (Swagger UI)
-- Планово: каждый час (через APScheduler)
+### Prometheus + Grafana Stack
+
+| Сервис           | Порт  | Описание                          |
+|------------------|-------|-----------------------------------|
+| Prometheus       | 9090  | Сбор метрик                       |
+| Grafana          | 3000  | Визуализация дашбордов            |
+| Node Exporter    | 9100  | Метрики системы                   |
+| cAdvisor         | 8080  | Метрики контейнеров               |
+| Postgres Exporter| 9187  | Метрики БД                        |
+| Blackbox Exporter| 9115  | Проверки доступности              |
+| Alertmanager     | 9093  | Управление алертами               |
+
+### Zabbix Stack
+
+| Сервис       | Порт  | Описание                    |
+|--------------|-------|-----------------------------|
+| Zabbix Web   | 8086  | Веб-интерфейс               |
+| Zabbix Server| 10051 | Сервер мониторинга          |
+| Zabbix Agent | 10050 | Агент сбора метрик          |
+
+### Другие инструменты
+
+| Сервис       | Порт  | Описание                    |
+|--------------|-------|-----------------------------|
+| Nagios       | 8083  | Мониторинг инфраструктуры   |
+| Portainer    | 9000  | Управление Docker           |
+| n8n          | 5678  | Автоматизация workflows     |
+| Jenkins      | 8085  | CI/CD пайплайны             |
 
 ---
 
-## 💾 Резервное копирование БД
+## 🔐 Безопасность
 
-В проект встроена система автоматического резервного копирования:
-- **Инструмент**: `pg_dump` (должен быть установлен в системе).
-- **Расписание**: ежедневно в 03:00 (через APScheduler).
-- **Путь**: папка `backups/` в корне проекта (можно изменить в `.env`).
-- **Формат имен**: `backup_YYYYMMDD_HHMMSS.sql`.
+### Встроенные механизмы
 
-Настройки в `.env`:
+- **Firewall Middleware**: Блокировка по IP (`ALLOWED_IPS`, `BLOCKED_IPS`)
+- **Rate Limiting**: Ограничение запросов на `/api/*`
+- **JWT Auth**: Безопасная авторизация с токенами
+- **CORS**: Настроенные разрешенные origins
+- **HTTPS**: Поддержка SSL-сертификатов
+
+### SSH доступ
+
+- **Порт**: 2222
+- **Команды**: `status`, `backup`, `exit`
+- Настраивается через переменные окружения
+
+### Переменные окружения (.env)
+
 ```env
+# API
+WAQI_TOKEN=your_token
+
+# Database
+POSTGRES_URL=postgresql+psycopg2://user:pass@host/db
+
+# Security
+SSL_CERTFILE=backend/certs/cert.pem
+SSL_KEYFILE=backend/certs/key.pem
+ALLOWED_IPS=127.0.0.1,192.168.1.0/24
+BLOCKED_IPS=
+TRUST_X_FORWARDED=false
+RATE_LIMIT_WINDOW_SECONDS=60
+RATE_LIMIT_MAX_REQUESTS=30
+
+# SSH
+SSH_HOST=0.0.0.0
+SSH_PORT=2222
+SSH_USERNAME=admin
+SSH_PASSWORD=admin123
+
+# Backup
 BACKUP_DIR=backups
 ```
 
 ---
 
-## 🔑 SSH Управление
+## 🏗️ Инфраструктура как код
 
-Для удаленного мониторинга и ручного запуска задач в бэкенд встроен SSH-сервер.
+### Terraform
 
-- **Порт**: `2222` (по умолчанию).
-- **Логин/Пароль**: настраиваются в `.env` (по умолчанию `admin/admin123`).
-- **Команды**:
-  - `status` — проверить состояние подключения к БД и токена.
-  - `backup` — запустить резервное копирование БД вручную.
-  - `exit` — выйти из консоли.
+Инфраструктура для облачного развертывания:
+- Вычислительные ресурсы
+- Сетевые настройки
+- Базы данных
+
+```bash
+cd terraform
+terraform init
+terraform apply
+```
+
+### Ansible
+
+Конфигурация серверов:
+- Установка зависимостей
+- Настройка безопасности
+- Развертывание приложения
+
+```bash
+cd ansible
+ansible-playbook -i inventory.ini monitoring.yml
+```
 
 ---
 
-## 📊 Инфраструктура мониторинга
+## CI/CD
 
-Проект включает в себя полноценную систему мониторинга на базе Docker. Все конфигурации вынесены в отдельную директорию `./monitoring`.
+### Jenkins Pipeline
 
-### Ключевые сервисы:
-- **Grafana (3000)**: Визуализация с предустановленным дашбордом Node Exporter.
-- **Prometheus (9090)**: Сбор и хранение метрик.
-- **Zabbix (8080)**: Комплексный мониторинг инфраструктуры.
-- **Nagios (8081)**: Проверка состояния хостов и сервисов.
-- **Alertmanager (9093)**: Уведомления в Telegram.
+Автоматизированная сборка и деплой:
+- Сборка Docker образов
+- Запуск тестов
+- Деплой на сервер
 
-Подробная документация по мониторингу: [monitoring/README.md](./monitoring/README.md).
+### Доступ к Jenkins
+
+- **URL**: http://localhost:8085
+- Начальный пароль доступен в логах контейнера
 
 ---
 
-## 🐳 Запуск через Docker
+## 💾 Резервное копирование
 
-Самый простой способ запустить проект вместе с базой данных — использовать Docker Compose.
+### Автоматическое
 
-### 1. Подготовка .env
+- **Расписание**: Ежедневно в 03:00
+- **Инструмент**: APScheduler + pg_dump
+- **Расположение**: `backups/backup_YYYYMMDD_HHMMSS.sql`
 
-Убедитесь, что у вас есть `.env` файл в папке `backend/` с токеном:
+### Ручное
+
+Через SSH или API:
+```bash
+# SSH
+ssh -p 2222 admin@localhost
+> backup
+
+# Или API
+POST /api/save-hourly
+```
+
+---
+
+## ⚙️ Конфигурация и учетные данные
+
+### Основные конфигурационные файлы
+
+| Файл | Описание | Содержимое |
+|------|----------|------------|
+| `backend/.env` | Переменные бэкенда | Токены, БД, секреты |
+| `docker-compose.yml` | Сервисы Docker | Все контейнеры, порты, лимиты |
+| `nginx.conf` | Настройки Nginx | Проксирование, SSL |
+| `terraform/terraform.tfvars` | Terraform переменные | Пароли БД, домены |
+| `ansible/inventory.ini` | Инвентарь серверов | IP адреса хостов |
+| `monitoring/.env` | Мониторинг | Telegram бот токен |
+
+### Backend (.env)
+
 ```env
-WAQI_TOKEN=ваш_токен
+# === API ===
+WAQI_TOKEN=ваш_токен_waqi
+
+# === Database (Supabase) ===
+POSTGRES_URL=postgresql+psycopg2://postgres.gtbowxugcefxtckejavv:QazaqAir963%40@aws-1-ap-northeast-1.pooler.supabase.com:5432/postgres
+
+# === Security ===
+SSL_CERTFILE=backend/certs/cert.pem
+SSL_KEYFILE=backend/certs/key.pem
+ALLOWED_IPS=
+BLOCKED_IPS=
+TRUST_X_FORWARDED=false
+RATE_LIMIT_WINDOW_SECONDS=60
+RATE_LIMIT_MAX_REQUESTS=30
+
+# === SSH Server ===
+SSH_HOST=0.0.0.0
+SSH_PORT=2222
+SSH_USERNAME=admin
+SSH_PASSWORD=admin123
+
+# === Project ===
+PROJECT_NAME=QazaqAir
+BACKUP_DIR=backups
 ```
 
-### 2. Запуск
+### Docker Compose (docker-compose.yml)
 
-Из корня проекта выполните:
+**Основные сервисы:**
+
+| Сервис | Контейнер | Порты | Логин/Пароль |
+|--------|-----------|-------|--------------|
+| PostgreSQL | qazaqair-db-1 | 5432 | user/password |
+| Backend | qazaqair-backend-1 | 8000, 2222 | - |
+| Frontend | qazaqair-frontend-1 | 3001 | - |
+| Nginx | qazaqair-app-1 | 80, 443 | - |
+| Grafana | qazaqair-grafana-1 | 3000 | admin/admin |
+| Prometheus | qazaqair-prometheus-1 | 9090 | - |
+| Zabbix Web | zabbix-web | 8086 | Admin/zabbix |
+| Zabbix DB | zabbix-db | - | zabbix/zabbix_password |
+| Nagios | qazaqair-nagios-1 | 8083 | nagiosadmin/nagiosadmin |
+| Jenkins | qazaqair-jenkins-1 | 8085 | admin/(пароль в логах) |
+| Portainer | portainer | 9000 | - |
+| n8n | qazaqair-n8n-1 | 5678 | - |
+| Graphite | qazaqair-graphite-1 | 2003, 8082, 8125 | - |
+
+### Terraform (terraform.tfvars)
+
+```hcl
+# === Database ===
+db_password = "your-secure-password"
+zabbix_db_password = "your-zabbix-password"
+
+# === Monitoring ===
+grafana_admin_password = "your-grafana-password"
+nagios_admin_password = "your-nagios-password"
+
+# === Infrastructure ===
+domain_name = "your-domain.com"
+enable_ssl = true
+```
+
+### Ansible (inventory.ini)
+
+```ini
+[monitoring]
+monitoring-server ansible_host=127.0.0.1 ansible_user=ubuntu
+
+[backend]
+backend-server ansible_host=127.0.0.1 ansible_user=ubuntu
+```
+
+### Monitoring (.env)
+
+```env
+TELEGRAM_BOT_TOKEN=your_bot_token
+TELEGRAM_CHAT_ID=your_chat_id
+```
+
+### Jenkins
+
+- **URL**: http://localhost:8085
+- **Начальный пароль**: `docker exec qazaqair-jenkins-1 cat /var/jenkins_home/secrets/initialAdminPassword`
+
+### Безопасные подключения
+
+**SSH в бэкенд:**
 ```bash
-docker-compose up -d --build
+ssh -p 2222 admin@localhost
+# Пароль: admin123 (или из SSH_PASSWORD в .env)
 ```
 
-### 3. Запуск мониторинга
-
+**PostgreSQL:**
 ```bash
-cd monitoring
-docker-compose up -d
+# Локально
+docker exec -it qazaqair-db-1 psql -U user -d airmonitor
+
+# Или через Supabase
+psql "postgresql://postgres.gtbowxugcefxtckejavv:QazaqAir963%40@aws-1-ap-northeast-1.pooler.supabase.com:5432/postgres"
 ```
+
+**Grafana:**
+- URL: http://localhost:3000
+- Login: admin
+- Password: admin (или GF_SECURITY_ADMIN_PASSWORD)
+
+**Zabbix:**
+- URL: http://localhost:8086
+- Login: Admin
+- Password: zabbix
+
+**Nagios:**
+- URL: http://localhost:8083
+- Login: nagiosadmin
+- Password: nagiosadmin
 
 ---
 
-## ⚠️ Известные особенности
+## 📞 Поддержка и документация
 
-- **Лимиты WAQI** — кеш снижает частоту обращений
-- **Гео‑feed в приоритете** — для корректных координат регионов
-- **HTTPS** — для продакшна нужен обратный прокси
+### Дополнительная документация
 
----
+- [DEPLOY.md](./DEPLOY.md) — Инструкции по развертыванию
+- [PRODUCTION_DEPLOYMENT.md](./PRODUCTION_DEPLOYMENT.md) — Продакшн деплой
+- [FRONTEND_NEW_README.md](./FRONTEND_NEW_README.md) — Документация фронтенда
+- [monitoring/README.md](./monitoring/README.md) — Документация мониторинга
 
-## 🔐 Безопасность (SSL, файрвол, rate limit)
+### Полезные команды
 
-### SSL/HTTPS
-- Поддерживается запуск по HTTPS в dev/локально через self‑signed сертификат.
-- Переменные окружения (backend/.env):
-  - `SSL_CERTFILE=backend/certs/cert.pem`
-  - `SSL_KEYFILE=backend/certs/key.pem`
-- При старте в логах видно: `Open: https://127.0.0.1:8000`
+```bash
+# Логи сервиса
+docker-compose logs -f backend
 
-### Фаервол (allow/deny по IP)
-- Реализован на уровне мидлвары в FastAPI.
-- Переменные окружения:
-  - `ALLOWED_IPS` — список разрешённых IP.
-  - `BLOCKED_IPS` — список запрещённых IP.
-  - `TRUST_X_FORWARDED` — `true/false`, доверять заголовку `X-Forwarded-For`.
+# Перезапуск сервиса
+docker-compose restart frontend_new
 
-### Ограничение запросов (rate limit)
-- Защита от частого обращения на `/api/*`.
-- Параметры в backend/.env:
-  - `RATE_LIMIT_WINDOW_SECONDS` — размер окна в секундах.
-  - `RATE_LIMIT_MAX_REQUESTS` — максимум запросов от одного IP.
+# Масштабирование
+docker-compose up -d --scale backend=2
+
+# Очистка
+docker system prune -f
+```
 
 ---
 
 ## 👨‍💻 Авторы
 
-Проект выполнен в рамках дисциплины **«Проектирование информационных систем»**  
-Преподаватель: Жукабаева Т.
+Проект выполнен в рамках дисциплины **«Проектирование информационных систем»**
+
+- **Преподаватель**: Жукабаева Т.
+- **Студент**: [Имя студента]
