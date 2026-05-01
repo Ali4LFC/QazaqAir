@@ -213,6 +213,47 @@ docker-compose ps
 - **Jenkins**: http://localhost:8085
 - **Portainer**: http://localhost:9000
 
+### Production развертывание (Linux сервер) ⚠️
+
+Для production с полной безопасностью (firewall, fail2ban, SSL):
+
+```bash
+# Только для Linux! Устанавливает UFW, Fail2Ban, Docker, Nginx
+sudo ./security/install-all.sh
+
+# Запуск контейнеров
+docker-compose up -d
+```
+
+**Что делает `install-all.sh`:**
+- Устанавливает и настраивает UFW (firewall)
+- Устанавливает и настраивает Fail2Ban (защита от брутфорса)
+- Устанавливает Certbot (SSL сертификаты)
+- Настраивает cron для бэкапов
+- Создает Docker сети
+
+### Windows 🪟
+
+На Windows `install-all.sh` не работает (bash/apt-get/systemd). Варианты:
+
+**Вариант 1: Только Docker (рекомендуется)**
+```powershell
+# Docker Desktop должен быть установлен
+docker-compose up -d --build
+```
+> Без UFW/Fail2Ban, но работает всё остальное. Windows Firewall блокирует неиспользуемые порты.
+
+**Вариант 2: WSL2 (полный функционал)**
+```powershell
+wsl --install -d Ubuntu
+# Внутри WSL:
+sudo ./security/install-all.sh
+docker-compose up -d
+```
+
+**Вариант 3: Linux сервер через Terraform**
+Смотри `DEPLOY.md` — создает EC2 instance и автоматически настраивает всё через Ansible.
+
 ### Ручная установка (для разработки)
 
 #### Backend
