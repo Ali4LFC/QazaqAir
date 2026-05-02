@@ -76,7 +76,7 @@ services:
     user: root
     ports:
       - "8085:8080"
-      - "50000:50000"
+      - "50001:50000"
     volumes:
       - jenkins_data:/var/jenkins_home
       - /var/run/docker.sock:/var/run/docker.sock
@@ -397,7 +397,7 @@ services:
     container_name: cadvisor
     restart: unless-stopped
     ports:
-      - "8080:8080"
+      - "8090:8080"
     networks:
       - app-network
     command:
@@ -552,11 +552,11 @@ services:
           memory: 256M
           cpus: '0.25'
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:80"]
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:80 || exit 1"]
       interval: 30s
       timeout: 10s
-      retries: 3
-      start_period: 60s
+      retries: 5
+      start_period: 120s
 
   nagios-nrpe:
     image: andreaskasper/nagios-nrpe:latest
