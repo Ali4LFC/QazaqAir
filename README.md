@@ -380,6 +380,17 @@ npm run dev
 
 ## 🔐 Безопасность
 
+<<<<<<< HEAD
+В проект встроена система автоматического резервного копирования:
+
+- **Инструмент**: `pg_dump` (должен быть установлен в системе).
+- **Расписание**: ежедневно в 03:00 (через APScheduler).
+- **Путь**: папка `backups/` в корне проекта (можно изменить в `.env`).
+- **Формат имен**: `backup_YYYYMMDD_HHMMSS.sql`.
+
+Настройки в `.env`:
+
+=======
 ### Встроенные механизмы
 
 - **Firewall Middleware**: Блокировка по IP (`ALLOWED_IPS`, `BLOCKED_IPS`)
@@ -396,6 +407,7 @@ npm run dev
 
 ### Переменные окружения (.env)
 
+>>>>>>> a59dbe043f0a28cd54a0ae2231149076b42967bd
 ```env
 # API
 WAQI_TOKEN=your_token
@@ -457,10 +469,20 @@ ansible-playbook -i inventory.ini monitoring.yml
 
 ### Jenkins Pipeline
 
+<<<<<<< HEAD
+### Ключевые сервисы:
+
+- **Grafana (3000)**: Визуализация с предустановленным дашбордом Node Exporter.
+- **Prometheus (9090)**: Сбор и хранение метрик.
+- **Zabbix (8080)**: Комплексный мониторинг инфраструктуры.
+- **Nagios (8081)**: Проверка состояния хостов и сервисов.
+- **Alertmanager (9093)**: Уведомления в Telegram.
+=======
 Автоматизированная сборка и деплой:
 - Сборка Docker образов
 - Запуск тестов
 - Деплой на сервер
+>>>>>>> a59dbe043f0a28cd54a0ae2231149076b42967bd
 
 ### Доступ к Jenkins
 
@@ -506,6 +528,11 @@ POST /api/save-hourly
 
 ### Backend (.env)
 
+<<<<<<< HEAD
+Убедитесь, что у вас есть `.env` файл в папке `backend/` с токеном:
+
+=======
+>>>>>>> a59dbe043f0a28cd54a0ae2231149076b42967bd
 ```env
 # === API ===
 WAQI_TOKEN=ваш_токен_waqi
@@ -535,6 +562,10 @@ BACKUP_DIR=backups
 
 ### Docker Compose (docker-compose.yml)
 
+<<<<<<< HEAD
+Из корня проекта выполните:
+
+=======
 **Основные сервисы:**
 
 | Сервис | Контейнер | Порты | Логин/Пароль |
@@ -594,6 +625,7 @@ TELEGRAM_CHAT_ID=your_chat_id
 ### Безопасные подключения
 
 **SSH в бэкенд:**
+>>>>>>> a59dbe043f0a28cd54a0ae2231149076b42967bd
 ```bash
 ssh -p 2222 admin@localhost
 # Пароль: admin123 (или из SSH_PASSWORD в .env)
@@ -636,6 +668,30 @@ psql "postgresql://postgres.gtbowxugcefxtckejavv:QazaqAir963%40@aws-1-ap-northea
 
 ### Полезные команды
 
+<<<<<<< HEAD
+### SSL/HTTPS
+
+- Поддерживается запуск по HTTPS в dev/локально через self‑signed сертификат.
+- Переменные окружения (backend/.env):
+  - `SSL_CERTFILE=backend/certs/cert.pem`
+  - `SSL_KEYFILE=backend/certs/key.pem`
+- При старте в логах видно: `Open: https://127.0.0.1:8000`
+
+### Фаервол (allow/deny по IP)
+
+- Реализован на уровне мидлвары в FastAPI.
+- Переменные окружения:
+  - `ALLOWED_IPS` — список разрешённых IP.
+  - `BLOCKED_IPS` — список запрещённых IP.
+  - `TRUST_X_FORWARDED` — `true/false`, доверять заголовку `X-Forwarded-For`.
+
+### Ограничение запросов (rate limit)
+
+- Защита от частого обращения на `/api/*`.
+- Параметры в backend/.env:
+  - `RATE_LIMIT_WINDOW_SECONDS` — размер окна в секундах.
+  - `RATE_LIMIT_MAX_REQUESTS` — максимум запросов от одного IP.
+=======
 ```bash
 # Логи сервиса
 docker-compose logs -f backend
@@ -649,6 +705,7 @@ docker-compose up -d --scale backend=2
 # Очистка
 docker system prune -f
 ```
+>>>>>>> a59dbe043f0a28cd54a0ae2231149076b42967bd
 
 ---
 
