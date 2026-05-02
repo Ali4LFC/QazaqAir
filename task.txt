@@ -11,7 +11,7 @@
 11. Создание пользователей и назначение привилегий (Grant).
 12. Настройка pg_hba.conf или my.cnf для разрешения удаленных подключений.
 13. Создание скрипта для автоматического резервного копирования (Backup).
-14. 1) node exporter 2) blackbox exporter 3) prometheus 4) grafana
+14. 1) node exporter 2) blackbox exporter 3) prometheus 4) grafana    
 15. 1) zabbix 2) nagios 3) grafite 
 16. 1) opal/opa 2) jetkins 3) n8n
 
