@@ -1,0 +1,15 @@
+# Lab Complete: Production значения переменных
+# Настроено под eu-central-1 (Frankfurt)
+
+environment = "prod"
+aws_region  = "eu-central-1"  # Frankfurt
+
+# Jenkins настройки
+jenkins_external_port = 8080
+
+# Конкретный AMI для eu-central-1
+custom_ami_id = "ami-0d1ddd83282187d18"  # Ubuntu 22.04 LTS eu-central-1
+
+# EC2 настройки увеличены для продакшена
+# instance_count.prod = 3 (из variables.tf)
+# instance_types.prod = "t3.medium" (из variables.tf)

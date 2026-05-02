@@ -1,0 +1,248 @@
+================================================================================
+                    QAZAQAIR - JENKINS JOB INSTRUCTIONS
+================================================================================
+
+DEPLOYED INFRASTRUCTURE SUMMARY (eu-central-1 / Frankfurt)
+================================================================================
+
+AWS Resources Created:
+--------------------
+1. VPC: vpc-061e597c83a826059 (CIDR: 10.0.0.0/16)
+   - Public Subnets: 10.0.0.0/24, 10.0.1.0/24
+   - Private Subnets: 10.0.10.0/24, 10.0.11.0/24
+   - NAT Gateway: 3.65.85.190
+   - Internet Gateway: igw-030937192a94fb136
+
+2. EC2 Instances:
+   - Bastion: i-0c45143ed13b0b064 (Public IP: 18.184.219.123, Private: 10.0.0.110)
+   - App Server: i-046f84bb70275a6c9 (Private IP: 10.0.10.212)
+   - Instance Type: t3.micro (Free Tier)
+   - AMI: Ubuntu 22.04 LTS (ami-0b3a21dbff1fffb4c)
+
+3. Security Groups:
+   - dev-app-sg (sg-09160a445cd0390d8): Ports 22, 80, 443, 8080
+   - dev-jenkins-sg (sg-01941a4ed1fa672f8): Port 8080
+
+4. IAM:
+   - Role: dev-ec2-role
+   - Instance Profile: dev-ec2-profile
+   - Policy: dev-app-policy (S3 access)
+   - Users: dev-jenkins-deployer, dev-developer, dev-viewer
+
+5. S3 Bucket: dev-app-bucket-719429929507
+
+6. Local Resources:
+   - Jenkins Container: dev-jenkins (ID: 63054d9b8cf8...)
+   - Jenkins URL: http://localhost:8080
+   - SSH Key: dev-private-key.pem (in lab-complete folder)
+
+================================================================================
+                         JENKINS JOB TO CREATE
+================================================================================
+
+Job Name: Deploy-QazaqAir-to-EC2
+Type: Freestyle Project
+
+DESCRIPTION:
+------------
+Deploy QazaqAir application to EC2 instances in private subnet via Bastion host.
+This job demonstrates the integration of all 6 Terraform labs:
+- Lab 1: Jenkins runs in Docker locally
+- Lab 2/3: Deploys to EC2 instances
+- Lab 4: Uses IAM roles for S3 access
+- Lab 5: Deploys to VPC with private subnets
+- Lab 6: Uses data sources for AMI info
+
+================================================================================
+                         JOB CONFIGURATION
+================================================================================
+
+1. GENERAL:
+-----------
+   - Discard old builds: Keep last 5 builds
+   - GitHub project: (your repo URL)
+
+2. SOURCE CODE MANAGEMENT:
+-------------------------
+   - Git
+   - Repository URL: https://github.com/yourusername/qazaqair.git
+   - Branch: */main
+
+3. BUILD TRIGGERS:
+-----------------
+   - GitHub hook trigger for GITScm polling
+   - OR Poll SCM: H/5 * * * * (every 5 minutes)
+
+4. BUILD ENVIRONMENT:
+--------------------
+   - Delete workspace before build starts: YES
+   - Add timestamps to console output: YES
+
+5. BUILD STEPS:
+--------------
+
+STEP 1: Prepare SSH Key (Execute Shell)
+---------------------------------------
+#!/bin/bash
+echo "Setting up SSH key for deployment..."
+mkdir -p ~/.ssh
+chmod 700 ~/.ssh
+cp /var/jenkins_home/.ssh/id_rsa ~/.ssh/id_rsa_bastion
+chmod 600 ~/.ssh/id_rsa_bastion
+echo "SSH key ready"
+
+
+STEP 2: Build Application (Execute Shell)
+-----------------------------------------
+#!/bin/bash
+echo "Building QazaqAir application..."
+cd $WORKSPACE
+# Build your application here
+# Example: npm install, mvn clean package, docker build, etc.
+echo "Build completed"
+
+
+STEP 3: Upload to S3 (Execute Shell)
+------------------------------------
+#!/bin/bash
+echo "Uploading artifacts to S3..."
+# Assuming EC2 has IAM role access to S3
+aws s3 cp ./build/ s3://dev-app-bucket-719429929507/builds/$BUILD_NUMBER/ --recursive
+echo "Upload completed to: s3://dev-app-bucket-719429929507/builds/$BUILD_NUMBER/"
+
+
+STEP 4: Deploy to EC2 (Execute Shell)
+-------------------------------------
+#!/bin/bash
+echo "Deploying to EC2 instances..."
+
+BASTION_IP="18.184.219.123"
+PRIVATE_IP="10.0.10.212"
+SSH_KEY="~/.ssh/id_rsa_bastion"
+
+# Step 4a: Download artifact from S3 to Bastion
+ssh -o StrictHostKeyChecking=no -i $SSH_KEY ubuntu@$BASTION_IP << 'EOF'
+    echo "Downloading from S3..."
+    aws s3 cp s3://dev-app-bucket-719429929507/builds/$BUILD_NUMBER/ ./app/ --recursive
+EOF
+
+# Step 4b: Copy from Bastion to Private EC2
+ssh -o StrictHostKeyChecking=no -i $SSH_KEY ubuntu@$BASTION_IP << EOF
+    scp -o StrictHostKeyChecking=no -r ./app ubuntu@$PRIVATE_IP:/home/ubuntu/app/
+EOF
+
+# Step 4c: Deploy on Private EC2
+ssh -o StrictHostKeyChecking=no -i $SSH_KEY ubuntu@$BASTION_IP << EOF
+    ssh -o StrictHostKeyChecking=no ubuntu@$PRIVATE_IP << 'INNER'
+        cd /home/ubuntu/app
+        # Stop existing service
+        sudo systemctl stop qazaqair || true
+        # Install/update application
+        sudo cp -r . /var/www/qazaqair/
+        # Restart nginx (if serving static files)
+        sudo systemctl restart nginx
+        echo "Deployment completed on $HOSTNAME"
+INNER
+EOF
+
+echo "Deployment finished!"
+
+
+STEP 5: Health Check (Execute Shell)
+------------------------------------
+#!/bin/bash
+echo "Running health check..."
+curl -f http://18.184.219.123/health || exit 1
+echo "Health check passed!"
+
+
+================================================================================
+                         POST-BUILD ACTIONS
+================================================================================
+
+1. E-mail Notification:
+   - Send e-mail for every unstable build
+   - Recipients: your-email@example.com
+
+2. Slack Notification (optional):
+   - Notify on success/failure
+
+3. Archive Artifacts:
+   - Files to archive: build/**/*
+
+================================================================================
+                         ACCESS INFORMATION
+================================================================================
+
+Jenkins:
+--------
+URL: http://localhost:8080
+Container: dev-jenkins
+Network: dev-jenkins-network
+Volume: dev-jenkins-data
+
+SSH Access:
+-----------
+# To Bastion (public):
+ssh -i ./dev-private-key.pem ubuntu@18.184.219.123
+
+# To Private EC2 (via Bastion):
+ssh -J ubuntu@18.184.219.123 ubuntu@10.0.10.212
+
+Test Application:
+-----------------
+curl http://18.184.219.123
+# Should show nginx welcome page
+
+S3 Bucket:
+----------
+Name: dev-app-bucket-719429929507
+ARN: arn:aws:s3:::dev-app-bucket-719429929507
+Region: eu-central-1
+
+================================================================================
+                         CLEANUP COMMANDS
+================================================================================
+
+To destroy all AWS resources:
+cd terraform/labs/lab-complete
+terraform destroy -auto-approve
+
+To stop Jenkins container:
+docker stop dev-jenkins
+
+To remove Jenkins container:
+docker rm dev-jenkins
+
+================================================================================
+                         TROUBLESHOOTING
+================================================================================
+
+1. If SSH fails:
+   - Check security group allows port 22
+   - Verify key permissions: chmod 600 dev-private-key.pem
+   - Check EC2 is running: aws ec2 describe-instances
+
+2. If S3 access fails:
+   - Verify IAM role attached to EC2
+   - Check bucket policy
+
+3. If Jenkins can't reach EC2:
+   - Verify Jenkins container has SSH key mounted
+   - Check network connectivity from container
+
+================================================================================
+                         SUMMARY
+================================================================================
+
+ALL 6 LABS INTEGRATED:
+- Lab 1: Jenkins in Docker (localhost:8080)
+- Lab 2: EC2 instances (t3.micro, Ubuntu 22.04)
+- Lab 3: Variables for all configuration
+- Lab 4: IAM roles and users
+- Lab 5: VPC with public/private subnets + Security Groups
+- Lab 6: Data sources for AMI lookup
+
+Infrastructure is ready for CI/CD pipeline deployment!
+
+================================================================================

@@ -1,5 +1,4 @@
-# Terraform Provider Configuration for QazaqAir Infrastructure
-# Module 9: IaC - Infrastructure as Code
+# Orchestrator Provider Configuration
 
 terraform {
   required_version = ">= 1.5.0"
@@ -20,14 +19,12 @@ terraform {
   }
 }
 
-# Docker Provider Configuration
 provider "docker" {
-  host = var.docker_host
+  host = "unix:///var/run/docker.sock"
 }
 
-# AWS Provider (eu-central-1 Frankfurt)
 provider "aws" {
-  region = "eu-central-1"
+  region = "eu-central-1"  # Frankfurt
   default_tags {
     tags = {
       Project   = "QazaqAir"
@@ -36,6 +33,4 @@ provider "aws" {
   }
 }
 
-provider "local" {
-  # Local provider for file operations
-}
+provider "local" {}
