@@ -691,7 +691,7 @@ psql "postgresql://postgres.gtbowxugcefxtckejavv:QazaqAir963%40@aws-1-ap-northea
 - Параметры в backend/.env:
   - `RATE_LIMIT_WINDOW_SECONDS` — размер окна в секундах.
   - `RATE_LIMIT_MAX_REQUESTS` — максимум запросов от одного IP.
-=======
+=======     
 ```bash
 # Логи сервиса
 docker-compose logs -f backend
